@@ -721,7 +721,7 @@ input[type=file]{display:none}
     <div class="chip chip-off" id="chipOff"><div class="dot-off"></div>Offline</div>
     <div class="chip chip-sync" id="chipSync" onclick="doSync()">↑ Sync (<span id="syncN">0</span>)</div>
     <div class="chip" id="chipRefresh" onclick="doRefreshData()" title="Tải dữ liệu mới từ server"
-         style="background:#eff6ff;border:1px solid #bfdbfe;color:#3730a3;cursor:pointer;display:none">
+         style="background:#eff6ff;border:1px solid #bfdbfe;color:#3730a3;cursor:pointer">
       🔄 <span id="refreshTxt">Cập nhật</span>
     </div>
     <!-- User chip — click để xem menu đăng xuất -->
@@ -1203,11 +1203,7 @@ function onLoginSuccess(email, name){
   document.getElementById('appShell').classList.add('on');
   // Tải dữ liệu app
   bootApp();
-  // Hiện nút Refresh nếu online
-  setTimeout(function(){
-    var cr=document.getElementById('chipRefresh');
-    if(cr&&S.online) cr.style.display='';
-  },2000);
+  // Nút Refresh luôn hiển thị (xử lý offline trong doRefreshData)
 }
 
 function doLogout(){
@@ -1331,8 +1327,9 @@ function bootApp(){
 // REFRESH DATA — QC bấm tự tải dữ liệu mới từ server
 // ══════════════════════════════════════════════════════════════
 function doRefreshData(){
-  if(!S.online){
-    showToast('📴 Cần có mạng để cập nhật dữ liệu','er',3000);
+  // Thử gọi dù offline (fetch sẽ fail và báo lỗi rõ ràng)
+  if(!navigator.onLine){
+    showToast('📴 Không có mạng — không thể cập nhật','er',3000);
     return;
   }
   var btn=document.getElementById('chipRefresh');
@@ -1511,9 +1508,7 @@ function updateNetUI(){
   // Offline mode: hiện banner nhắc nhẹ
   var ob=document.getElementById('offlineModeBar');
   if(ob) ob.style.display=S.online?'none':'flex';
-  // Nút refresh chỉ hiện khi online
-  var cr=document.getElementById('chipRefresh');
-  if(cr) cr.style.display=S.online?'':'none';
+  // Nút refresh luôn hiển thị
 }
 function loadQueue(){try{S.queue=JSON.parse(localStorage.getItem(QKEY)||'[]');}catch(e){S.queue=[];}updateQueueUI();}
 function saveQueue(){try{localStorage.setItem(QKEY,JSON.stringify(S.queue));}catch(e){}updateQueueUI();}
