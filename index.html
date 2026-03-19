@@ -1094,7 +1094,7 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycby1Ad60bvKkErMkCEXHN7Zd5jCl8eOn2llfm5E18kCOtOCSnW8dqlwdWimwBvVZlXQIQg/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbziI7vztDw4O975JoW-UHO2psPAHB95Zcxajt5rc7bldP7JbQpQFGU6JwQyqZwOEmrKNw/exec';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -1110,7 +1110,7 @@ var LKEY = 'ipqc_login';  // localStorage key lưu login session
 // API BRIDGE — fetch() → GAS doPost
 // GAS_URL được set từ config.js hoặc hardcode
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = window.GAS_URL || '';
+// GAS_URL đã được cấu hình ở trên
 
 function _gasCall(action, body, ok, err) {
   if(!GAS_URL){ if(err)err(new Error('GAS_URL chưa được cấu hình')); return; }
