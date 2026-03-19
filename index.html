@@ -269,14 +269,14 @@ textarea{resize:none;line-height:1.5}
 .note-scope-row.on .note-scope-cb::after{content:'✓';color:#fff;font-size:11px;font-weight:800;line-height:1}
 .note-scope-tag{font-size:10px;font-weight:700;color:var(--txt3);letter-spacing:.5px;text-transform:uppercase;min-width:72px;pointer-events:none}
 .note-scope-val{font-size:13px;font-weight:600;color:var(--txt);font-family:var(--mono);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
-.note-scope-empty{font-size:12px;color:var(--txt3);font-style:italic;font-family:var(--font);font-weight:400;pointer-events:none}
+.note-scope-empty{font-size:12px;color:var(--txt3)font-family:var(--font);font-weight:400;pointer-events:none}
 .note-scope-row.on .note-scope-val{color:var(--ac)}
 .note-remark-wrap{background:#fff;border:1.5px solid #D0D0DC;border-radius:14px;overflow:hidden;margin-top:6px;transition:border-color .15s,box-shadow .15s}
 .note-remark-wrap:focus-within{border-color:var(--ac);box-shadow:0 0 0 3px rgba(79,70,229,.1)}
 .note-remark-header{display:flex;align-items:center;gap:7px;padding:10px 13px 0 13px}
 .note-remark-header span{font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.5px;text-transform:uppercase}
 .note-remark-wrap textarea{width:100%;box-sizing:border-box;border:none;outline:none;background:transparent;font-family:var(--font);font-size:14px;color:var(--txt);line-height:1.7;resize:none;padding:8px 13px 13px 13px;min-height:96px;-webkit-appearance:none}
-.note-remark-wrap textarea::placeholder{color:#aaa;font-style:italic}
+.note-remark-wrap textarea::placeholder{color:#aaa}
 .note-remark-footer{display:flex;justify-content:flex-end;padding:0 10px 8px;border-top:1px solid #f0f0f4}
 .note-remark-count{font-size:11px;color:var(--txt3);font-family:var(--mono)}
 
@@ -304,7 +304,7 @@ textarea{resize:none;line-height:1.5}
 /* Thông tin unhold đã ghi (readonly) */
 .pa-unhold-done{margin-top:7px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:7px 10px;font-size:11px;color:#14532d;line-height:1.7}
 .pa-unhold-done-label{font-weight:700;font-size:10px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:2px;color:#166534}
-.pa-unhold-done-reason{font-style:italic;margin-bottom:2px}
+.pa-unhold-done-reason{margin-bottom:2px}
 .pa-unhold-done-meta{font-family:var(--mono);font-size:10px;color:#15803d;opacity:.8}
 
 /* Form Unhold (khi chưa unhold) */
@@ -313,7 +313,7 @@ textarea{resize:none;line-height:1.5}
 .pa-unhold-form-label{font-size:10px;font-weight:700;color:#c2410c;letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px}
 .pa-unhold-inp{width:100%;background:#fff;border:1.5px solid #fed7aa;border-radius:8px;color:var(--txt);font-family:var(--font);font-size:12px;padding:8px 10px;outline:none;-webkit-appearance:none;resize:none;line-height:1.5;transition:border-color .15s}
 .pa-unhold-inp:focus{border-color:#f97316;box-shadow:0 0 0 3px rgba(249,115,22,.12)}
-.pa-unhold-inp::placeholder{color:#fdba74;font-style:italic}
+.pa-unhold-inp::placeholder{color:#fdba74}
 .pa-unhold-actions{display:flex;gap:6px;margin-top:6px;align-items:center}
 .pa-unhold-cancel{background:none;border:none;color:var(--txt3);font-family:var(--font);font-size:12px;font-weight:600;padding:5px 8px;cursor:pointer;touch-action:manipulation}
 .pa-unhold-cancel:active{opacity:.6}
@@ -342,7 +342,7 @@ textarea{resize:none;line-height:1.5}
 .ro-body{padding:0 13px 13px;display:flex;flex-direction:column;gap:8px}
 .ro-note textarea{font-size:13px;min-height:80px;background:#faf8ff;border:1.5px solid #ddd6fe;border-radius:10px;padding:10px 12px;line-height:1.6;resize:none;width:100%;box-sizing:border-box;font-family:var(--font);color:var(--txt);outline:none;-webkit-appearance:none}
 .ro-note textarea:focus{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.1)}
-.ro-note textarea::placeholder{color:#c4b5fd;font-style:italic}
+.ro-note textarea::placeholder{color:#c4b5fd}
 .ro-photo{border:1.5px dashed #ddd6fe;border-radius:9px;overflow:hidden;background:#faf8ff}
 
 /* STEPS */
@@ -428,7 +428,7 @@ textarea{resize:none;line-height:1.5}
 .ic-num{width:24px;height:24px;border-radius:7px;flex-shrink:0;margin-top:1px;background:#f0f0f5;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--txt3);font-family:var(--mono)}
 .ic-body{flex:1;min-width:0}
 .ic-name{font-size:16px;font-weight:700;line-height:1.35;color:#000000;letter-spacing:-.3px}
-.ic-std{font-size:12px;color:#555;font-style:italic;margin-top:4px;display:block;line-height:1.55;font-weight:400}
+.ic-std{font-size:12px;color:#555margin-top:4px;display:block;line-height:1.55;font-weight:400}
 .ic-btns{display:flex;gap:5px;padding:0 12px 10px;align-items:center}
 .ic-btns button{flex:1;padding:7px 2px;border-radius:9px;border:1.5px solid var(--border2);background:#fff;color:#000;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;touch-action:manipulation;letter-spacing:-.1px}
 .ic-btns button:active{opacity:.7;transform:scale(.97)}
@@ -622,8 +622,8 @@ input[type=file]{display:none}
 .d-badge.em{background:#f4f4f5;color:var(--txt3)}
 .d-info{flex:1;min-width:0}
 .d-name{font-size:13px;font-weight:600;line-height:1.4;color:var(--txt)}
-.d-std{font-size:10px;color:var(--txt3);font-family:var(--mono);margin-top:2px;font-style:italic}
-.d-note{font-size:11px;color:var(--txt2);margin-top:3px;font-style:italic}
+.d-std{font-size:10px;color:var(--txt3);font-family:var(--mono);margin-top:2px}
+.d-note{font-size:11px;color:var(--txt2);margin-top:3px}
 .d-photo{margin-top:7px;border-radius:9px;overflow:hidden;border:1px solid var(--border)}
 .d-photo a{display:block}
 .d-photo img{display:block;width:100%;max-height:180px;object-fit:cover}
@@ -939,7 +939,7 @@ input[type=file]{display:none}
       </div>
       <div class="ic-photo" id="notePhotoWrap" style="margin-top:8px">
         <label class="photo-btn" for="notePhotoFile">📷 <span>Chụp / Tải ảnh minh họa</span></label>
-        <input type="file" id="notePhotoFile" accept="image/*" capture="environment"
+        <input type="file" id="notePhotoFile" accept="image/*"
                onchange="addNotePhoto(this)">
       </div>
     </div>
@@ -964,8 +964,8 @@ input[type=file]{display:none}
           </div>
         </div>
         <div class="info-2col-item">
-          <label>Operator_code</label>
-          <input type="text" id="operatorIdInp" placeholder="(Mã thợ máy)"
+          <label>Operator Code</label>
+          <input type="text" id="operatorIdInp" placeholder="Mã thợ máy"
                  autocomplete="off" autocorrect="off" spellcheck="false"
                  oninput="S.operatorId=this.value.trim()"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('lotQtyInp').focus();}">
@@ -973,22 +973,22 @@ input[type=file]{display:none}
       </div>
       <div class="info-2col" style="margin-top:6px">
         <div class="info-2col-item">
-          <label>Lot_quantity <span style="font-weight:400;color:var(--txt3)">( . )</span></label>
-          <input type="text" inputmode="numeric" id="lotQtyInp" placeholder="số lượng pcs, sheets.."
+          <label>Lot Quantity</label>
+          <input type="text" inputmode="numeric" id="lotQtyInp" placeholder="Số lượng pcs / sheets"
                  autocomplete="off" oninput="S.lotQty=this.value.trim()"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('aqlQtyInp').focus();}">
         </div>
         <div class="info-2col-item">
-          <label>AQL_q'ty/box, Pallet</label>
-          <input type="text" inputmode="numeric" id="aqlQtyInp" placeholder="Số lượng AQL / số box hoặc.."
+          <label>AQL Qty / box, Pallet</label>
+          <input type="text" inputmode="numeric" id="aqlQtyInp" placeholder="Số lượng AQL / số box"
                  autocomplete="off" oninput="S.aqlQty=this.value.trim()"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('aqlAcceptInp').focus();}">
         </div>
       </div>
       <div class="info-2col" style="margin-top:6px">
         <div class="info-2col-item">
-          <label>AQL accepted qty</label>
-          <input type="text" inputmode="numeric" id="aqlAcceptInp" placeholder="số lượng pcs, sheets.."
+          <label>AQL Accepted Qty</label>
+          <input type="text" inputmode="numeric" id="aqlAcceptInp" placeholder="Số lượng pcs / sheets"
                  autocomplete="off" oninput="S.aqlAccept=this.value.trim()"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('btnGoToB').focus();}">
         </div>
@@ -1937,7 +1937,7 @@ function refreshIC(i){
 }
 function addPhoto(i,input){var f=input.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(e){var img=new Image();img.onload=function(){var MAX=1200,q=0.72;var w=img.width,h=img.height;if(w>MAX||h>MAX){var sc=MAX/Math.max(w,h);w=Math.round(w*sc);h=Math.round(h*sc);}var cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);var b64=cv.toDataURL('image/jpeg',q);cv.width=0;cv.height=0;S.items[i].photoBase64=b64;S.items[i].photoName=S.selectedSOs[0]+'_'+S.process+'_'+(i+1)+'_'+Date.now()+'.jpg';document.getElementById('iphoto'+i).innerHTML=photoHTML(S.items[i],i);};img.src=e.target.result;};rd.readAsDataURL(f);}
 function delPhoto(i){S.items[i].photoBase64='';S.items[i].photoName='';document.getElementById('iphoto'+i).innerHTML=photoHTML(S.items[i],i);}
-function photoHTML(item,i){if(item.photoBase64)return'<img class="photo-img" src="'+item.photoBase64+'"><button class="photo-del" onclick="delPhoto('+i+')">✕ Xóa ảnh</button>';return'<label class="photo-btn" for="pfile'+i+'">📷 <span>Chụp / Tải ảnh</span></label><input type="file" id="pfile'+i+'" accept="image/*" capture="environment" onchange="addPhoto('+i+',this)">';}
+function photoHTML(item,i){if(item.photoBase64)return'<img class="photo-img" src="'+item.photoBase64+'"><button class="photo-del" onclick="delPhoto('+i+')">✕ Xóa ảnh</button>';return'<label class="photo-btn" for="pfile'+i+'">📷 <span>Chụp / Tải ảnh</span></label><input type="file" id="pfile'+i+'" accept="image/*" onchange="addPhoto('+i+',this)">';}
 
 var _pbRaf=null,_spbCount=null,_spbSO=null,_spbEl=null,_spbSegs=null;
 function updatePB(){
@@ -2385,7 +2385,7 @@ function _renderNotePhoto(){
   if(_notePhotoBase64){
     wrap.innerHTML='<img class="photo-img" src="'+_notePhotoBase64+'"><button class="photo-del" onclick="delNotePhoto()">✕ Xóa ảnh</button>';
   } else {
-    wrap.innerHTML='<label class="photo-btn" for="notePhotoFile">📷 <span>Chụp / Tải ảnh minh họa</span></label><input type="file" id="notePhotoFile" accept="image/*" capture="environment" onchange="addNotePhoto(this)">';
+    wrap.innerHTML='<label class="photo-btn" for="notePhotoFile">📷 <span>Chụp / Tải ảnh minh họa</span></label><input type="file" id="notePhotoFile" accept="image/*" onchange="addNotePhoto(this)">';
   }
 }
 function _resetNoteMode(){
@@ -2724,7 +2724,7 @@ function _renderPABox(){
            +'<span>🔓 Xác nhận Unhold</span>'
            +'</button></div></div>';
     } else if(!rowIdx){
-      html+='<div style="font-size:10px;color:var(--txt3);margin-top:4px;font-style:italic">⚠️ Cần online để Unhold</div>';
+      html+='<div style="font-size:10px;color:var(--txt3);margin-top:4px">⚠️ Cần online để Unhold</div>';
     }
     html+='</div>';
     if(!unholded) hasActiveHold=true;
