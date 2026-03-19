@@ -720,6 +720,10 @@ input[type=file]{display:none}
   <div class="tb-right">
     <div class="chip chip-off" id="chipOff"><div class="dot-off"></div>Offline</div>
     <div class="chip chip-sync" id="chipSync" onclick="doSync()">↑ Sync (<span id="syncN">0</span>)</div>
+    <div class="chip" id="chipRefresh" onclick="doRefreshData()" title="Tải dữ liệu mới từ server"
+         style="background:#eff6ff;border:1px solid #bfdbfe;color:#3730a3;cursor:pointer;display:none">
+      🔄 <span id="refreshTxt">Cập nhật</span>
+    </div>
     <!-- User chip — click để xem menu đăng xuất -->
     <div class="chip-user" id="chipUser" onclick="toggleLogoutDD()">
       <div class="av" id="userAv">?</div>
@@ -1199,6 +1203,11 @@ function onLoginSuccess(email, name){
   document.getElementById('appShell').classList.add('on');
   // Tải dữ liệu app
   bootApp();
+  // Hiện nút Refresh nếu online
+  setTimeout(function(){
+    var cr=document.getElementById('chipRefresh');
+    if(cr&&S.online) cr.style.display='';
+  },2000);
 }
 
 function doLogout(){
@@ -1300,18 +1309,65 @@ function bootApp(){
       // ── PWA: thử restore từ cache offline ──
       try{
         var cached=JSON.parse(localStorage.getItem('rpac_boot_cache')||'null');
-        var MAX_CACHE_AGE=24*60*60*1000; // 24 tiếng
+        var MAX_CACHE_AGE=7*24*60*60*1000; // 7 ngày
         if(cached && cached.data && (Date.now()-cached.ts)<MAX_CACHE_AGE){
           S.boot=cached.data;
           _soUppCache=null;
           _syncPARowsFromBoot();
           buildDropdowns();
           _buildMachineList(cached.data.machineList||[]);
-          showToast('📴 Dùng dữ liệu offline (cập nhật lúc '+new Date(cached.ts).toLocaleTimeString('vi-VN')+')','',5000);
+          var cachedAge=Math.round((Date.now()-cached.ts)/3600000);
+          var ageStr=cachedAge<1?'vừa xong':cachedAge+'h trước';
+          showToast('📴 Offline — dữ liệu cache ('+ageStr+')','',5000);
           return;
         }
       }catch(e){}
       showErrBox((err&&err.message)?err.message:String(err||'Lỗi không xác định'));
+    }
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// REFRESH DATA — QC bấm tự tải dữ liệu mới từ server
+// ══════════════════════════════════════════════════════════════
+function doRefreshData(){
+  if(!S.online){
+    showToast('📴 Cần có mạng để cập nhật dữ liệu','er',3000);
+    return;
+  }
+  var btn=document.getElementById('chipRefresh');
+  var txt=document.getElementById('refreshTxt');
+  if(btn) btn.style.opacity='0.5';
+  if(txt) txt.textContent='Đang tải...';
+
+  gasGetAppData(
+    function(data){
+      if(btn){btn.style.opacity='';} 
+      if(txt) txt.textContent='Cập nhật';
+      if(!data||!data.ok){
+        showToast('⚠️ Không tải được dữ liệu: '+(data&&data.error||'lỗi'),'er',4000);
+        return;
+      }
+      // Cập nhật runtime
+      S.boot=data; _soUppCache=null;
+      _syncPARowsFromBoot();
+      buildDropdowns();
+      _buildMachineList(data.machineList||[]);
+      // Lưu cache mới
+      try{
+        localStorage.setItem('rpac_boot_cache',
+          JSON.stringify({data:data, ts:Date.now()}));
+      }catch(e){}
+      var now=new Date();
+      var timeStr=now.getHours()+':'+('0'+now.getMinutes()).slice(-2);
+      showToast('✅ Dữ liệu đã được cập nhật lúc '+timeStr,'ok',4000);
+      // Refresh history cache
+      _bgRefreshHistory();
+    },
+    function(err){
+      if(btn) btn.style.opacity='';
+      if(txt) txt.textContent='Cập nhật';
+      showToast('⚠️ Lỗi kết nối: '+(err&&err.message||String(err||'')),'er',4000);
     }
   );
 }
@@ -1455,6 +1511,9 @@ function updateNetUI(){
   // Offline mode: hiện banner nhắc nhẹ
   var ob=document.getElementById('offlineModeBar');
   if(ob) ob.style.display=S.online?'none':'flex';
+  // Nút refresh chỉ hiện khi online
+  var cr=document.getElementById('chipRefresh');
+  if(cr) cr.style.display=S.online?'':'none';
 }
 function loadQueue(){try{S.queue=JSON.parse(localStorage.getItem(QKEY)||'[]');}catch(e){S.queue=[];}updateQueueUI();}
 function saveQueue(){try{localStorage.setItem(QKEY,JSON.stringify(S.queue));}catch(e){}updateQueueUI();}
