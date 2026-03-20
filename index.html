@@ -358,6 +358,10 @@ textarea{resize:none;line-height:1.5}
 /* SO PICKER */
 .so-chips{display:flex;flex-wrap:wrap;gap:5px;min-height:24px;margin-bottom:7px}
 .so-chip{display:flex;align-items:center;gap:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px;font-size:11px;color:var(--ac);font-family:var(--mono);font-weight:500}
+.mdd-item{padding:9px 12px;font-size:13px;cursor:pointer;color:var(--txt);border-bottom:1px solid var(--border)}
+.mdd-item:last-child{border-bottom:none}
+.mdd-item:hover,.mdd-item.active{background:var(--bg2)}
+.mdd-item b{color:var(--ac);font-weight:700}
 .so-chip-x{cursor:pointer;color:var(--txt3);font-size:19px;font-weight:700;line-height:1;padding:2px 5px;touch-action:manipulation;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center}
 .so-manual-row{display:flex;gap:6px;margin-bottom:8px}
 .so-manual-inp{flex:1;min-width:0;background:#fff;border:1.5px solid #D0D0DC;border-radius:10px;color:var(--txt);font-family:var(--font);font-size:13px;padding:10px 11px;outline:none;-webkit-appearance:none;transition:border-color .15s}
@@ -961,11 +965,18 @@ input[type=file]{display:none}
       <div id="grpMachineOp" class="info-2col" style="margin-top:8px;display:none">
         <div class="info-2col-item">
           <label>Machine</label>
-          <div class="sw">
-            <select id="machineInp" onchange="S.machine=this.value"
-                    style="font-size:13px;padding:9px 12px;padding-right:28px">
-              <option value="">-chọn tên máy-</option>
-            </select>
+          <div style="position:relative">
+            <input type="text" id="machineInp" placeholder="Gõ tên máy để tìm..."
+                   autocomplete="off" autocorrect="off" spellcheck="false"
+                   oninput="onMachineInput(this.value)"
+                   onfocus="onMachineInput(this.value)"
+                   onblur="setTimeout(hideMachineDD,200)"
+                   onkeydown="onMachineKey(event)"
+                   style="width:100%;box-sizing:border-box">
+            <div id="machineDD" style="display:none;position:absolute;top:100%;left:0;right:0;
+                 background:#fff;border:1px solid var(--border);border-radius:8px;
+                 box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;
+                 max-height:180px;overflow-y:auto;margin-top:3px"></div>
           </div>
         </div>
         <div class="info-2col-item">
@@ -2188,7 +2199,7 @@ function resetForm(){
   S.selectedSOs=[];S.process='';S.items=[];S.soMeta={};
   S.operatorId='';S.machine='';S.lotQty='';S.aqlQty='';S.aqlAccept='';
   var _oi=document.getElementById('operatorIdInp');if(_oi)_oi.value='';
-  var _mi=document.getElementById('machineInp');if(_mi)_mi.value='';
+  var _mi=document.getElementById('machineInp');if(_mi)_mi.value='';hideMachineDD();
   var _lq=document.getElementById('lotQtyInp');if(_lq)_lq.value='';
   var _aq=document.getElementById('aqlQtyInp');if(_aq)_aq.value='';
   var _aa=document.getElementById('aqlAcceptInp');if(_aa)_aa.value='';
@@ -2256,15 +2267,62 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
     try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:newAll300.slice(0,100),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
   },function(){if(statEl)statEl.style.opacity='';});
 },300);}
+var _machineList = [];
 function _buildMachineList(list){
-  var sel = document.getElementById('machineInp');
-  if(!sel) return;
-  var cur = S.machine || '';
-  var html = '<option value="">-- Chọn máy --</option>';
-  for(var i=0;i<list.length;i++){
-    html += '<option value="'+esc(list[i])+'"'+(list[i]===cur?' selected':'')+'>'+esc(list[i])+'</option>';
+  _machineList = list || [];
+}
+function onMachineInput(val){
+  S.machine = val.trim();
+  var q = val.trim().toLowerCase();
+  var dd = document.getElementById('machineDD');
+  if(!dd) return;
+  var filtered = q
+    ? _machineList.filter(function(m){ return m.toLowerCase().indexOf(q) >= 0; })
+    : _machineList;
+  if(!filtered.length){ dd.style.display='none'; return; }
+  dd.innerHTML = filtered.map(function(m,i){
+    return '<div class="mdd-item" data-val="'+esc(m)+'" onmousedown="selectMachine(''+esc(m)+'')">'
+      + (q ? m.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\]/g,'\$&')+')','gi'),'<b>$1</b>') : esc(m))
+      +'</div>';
+  }).join('');
+  dd.style.display = 'block';
+}
+function selectMachine(val){
+  S.machine = val;
+  var inp = document.getElementById('machineInp');
+  if(inp) inp.value = val;
+  hideMachineDD();
+  // Focus sang Operator Code
+  setTimeout(function(){ var el=document.getElementById('operatorIdInp'); if(el) el.focus(); },80);
+}
+function hideMachineDD(){
+  var dd = document.getElementById('machineDD');
+  if(dd) dd.style.display='none';
+}
+function onMachineKey(e){
+  var dd = document.getElementById('machineDD');
+  if(!dd || dd.style.display==='none') return;
+  var items = dd.querySelectorAll('.mdd-item');
+  var active = dd.querySelector('.mdd-item.active');
+  var idx = -1;
+  items.forEach(function(el,i){ if(el===active) idx=i; });
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    var next = items[idx+1] || items[0];
+    if(active) active.classList.remove('active');
+    if(next){ next.classList.add('active'); next.scrollIntoView({block:'nearest'}); }
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    var prev = items[idx-1] || items[items.length-1];
+    if(active) active.classList.remove('active');
+    if(prev){ prev.classList.add('active'); prev.scrollIntoView({block:'nearest'}); }
+  } else if(e.key==='Enter'){
+    e.preventDefault();
+    if(active){ selectMachine(active.getAttribute('data-val')); }
+    else if(items.length===1){ selectMachine(items[0].getAttribute('data-val')); }
+  } else if(e.key==='Escape'){
+    hideMachineDD();
   }
-  sel.innerHTML = html;
 }
 function _rebuildDropdowns(){var f=getHFilter();rebuildQCFilter(H.inspList,f.inspector);var hpSel=document.getElementById('hProc');var curProc=f.process;var procs={};H.all.forEach(function(s){if(s.process)procs[s.process]=true;});var procList=Object.keys(procs).sort();var phtml='<option value="">Tất cả công đoạn</option>';procList.forEach(function(p){phtml+='<option value="'+esc(p)+'"'+(p===curProc?' selected':'')+'>'+esc(p)+'</option>';});hpSel.innerHTML=phtml;}
 function showHLoading(){document.getElementById('hList').innerHTML='<div class="h-loading"><div class="h-spinner"></div>Đang tải...</div>';document.getElementById('pager').style.display='none';}
