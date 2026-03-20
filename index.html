@@ -957,7 +957,8 @@ input[type=file]{display:none}
     </div>
     <!-- Các ô nhập xuất hiện sau khi chọn công đoạn -->
     <div id="procExtraWrap" style="display:none">
-      <div class="info-2col" style="margin-top:8px">
+      <!-- Nhóm NON-FINAL: Machine + Operator Code -->
+      <div id="grpMachineOp" class="info-2col" style="margin-top:8px;display:none">
         <div class="info-2col-item">
           <label>Machine</label>
           <div class="sw">
@@ -975,28 +976,30 @@ input[type=file]{display:none}
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('lotQtyInp').focus();}">
         </div>
       </div>
-      <div class="info-2col" style="margin-top:6px">
+      <!-- Lot Quantity — hiện cho cả 2 loại -->
+      <div id="grpLot" class="info-2col" style="margin-top:6px;display:none">
         <div class="info-2col-item">
           <label>Lot Quantity</label>
           <input type="text" inputmode="numeric" id="lotQtyInp" placeholder="Số lượng pcs / sheets"
                  autocomplete="off" oninput="S.lotQty=this.value.trim()"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('aqlQtyInp').focus();}">
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();_focusNextAfterLot();}">
         </div>
+        <div class="info-2col-item"></div>
+      </div>
+      <!-- Nhóm FINAL: AQL Qty + AQL Accepted -->
+      <div id="grpAql" class="info-2col" style="margin-top:6px;display:none">
         <div class="info-2col-item">
           <label>AQL Qty / box, Pallet</label>
           <input type="text" id="aqlQtyInp" placeholder="SL kiểm/số box, số pallet"
                  autocomplete="off" oninput="S.aqlQty=this.value.trim()"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('aqlAcceptInp').focus();}">
         </div>
-      </div>
-      <div class="info-2col" style="margin-top:6px">
         <div class="info-2col-item">
           <label>AQL Accepted Qty</label>
           <input type="text" inputmode="numeric" id="aqlAcceptInp" placeholder="số pcs, số sheet"
                  autocomplete="off" oninput="S.aqlAccept=this.value.trim()"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('btnGoToB').focus();}">
         </div>
-        <div class="info-2col-item"></div>
       </div>
     </div>
   </div>
@@ -1638,15 +1641,40 @@ function renderSOInfo(){
 // ══════════════════════════════════════════════════════════════
 function onProcChange(val){
   S.process = val;
-  var wrap = document.getElementById('procExtraWrap');
-  if(wrap) wrap.style.display = val ? '' : 'none';
-  // Focus vào Machine sau khi chọn công đoạn
-  if(val){
-    setTimeout(function(){
-      var m = document.getElementById('machineInp');
-      if(m) m.focus();
-    }, 80);
+  S.operatorId=''; S.machine=''; S.lotQty=''; S.aqlQty=''; S.aqlAccept='';
+  var oi=document.getElementById('operatorIdInp'); if(oi) oi.value='';
+  var mi=document.getElementById('machineInp');    if(mi) mi.value='';
+  var lq=document.getElementById('lotQtyInp');     if(lq) lq.value='';
+  var aq=document.getElementById('aqlQtyInp');     if(aq) aq.value='';
+  var aa=document.getElementById('aqlAcceptInp');  if(aa) aa.value='';
+  var wrap    = document.getElementById('procExtraWrap');
+  var grpMach = document.getElementById('grpMachineOp');
+  var grpLot  = document.getElementById('grpLot');
+  var grpAql  = document.getElementById('grpAql');
+  if(!val){ if(wrap) wrap.style.display='none'; return; }
+  if(wrap) wrap.style.display='';
+  var isFinal = val.toLowerCase().indexOf('final') >= 0;
+  if(isFinal){
+    if(grpMach) grpMach.style.display='none';
+    if(grpLot)  grpLot.style.display='';
+    if(grpAql)  grpAql.style.display='';
+    var lq2=document.getElementById('lotQtyInp');
+    if(lq2) lq2.setAttribute('data-next','aqlQtyInp');
+    setTimeout(function(){ var el=document.getElementById('lotQtyInp'); if(el) el.focus(); },80);
+  } else {
+    if(grpMach) grpMach.style.display='';
+    if(grpLot)  grpLot.style.display='';
+    if(grpAql)  grpAql.style.display='none';
+    var lq3=document.getElementById('lotQtyInp');
+    if(lq3) lq3.setAttribute('data-next','btnGoToB');
+    setTimeout(function(){ var el=document.getElementById('machineInp'); if(el) el.focus(); },80);
   }
+}
+function _focusNextAfterLot(){
+  var lq=document.getElementById('lotQtyInp');
+  var nextId=lq&&lq.getAttribute('data-next');
+  var next=nextId&&document.getElementById(nextId);
+  if(next) next.focus();
 }
 function goToB(){
   if(!S.selectedSOs.length){showToast('⚠️ Chọn ít nhất 1 SO','er');return;}
