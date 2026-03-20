@@ -2280,12 +2280,13 @@ function onMachineInput(val){
     ? _machineList.filter(function(m){ return m.toLowerCase().indexOf(q) >= 0; })
     : _machineList;
   if(!filtered.length){ dd.style.display='none'; return; }
-  dd.innerHTML = filtered.map(function(m,i){
-    return '<div class="mdd-item" data-val="'+esc(m)+'" onmousedown="selectMachine(''+esc(m)+'')">'
-      + (q ? m.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\]/g,'\$&')+')','gi'),'<b>$1</b>') : esc(m))
-      +'</div>';
-  }).join('');
-  dd.style.display = 'block';
+  var html='';
+  for(var i=0;i<filtered.length;i++){
+    html+='<div class="mdd-item" data-val="'+esc(filtered[i])+'">' + esc(filtered[i]) + '</div>';
+  }
+  dd.innerHTML=html;
+  dd.onclick=function(e){var it=e.target.closest('.mdd-item');if(it)selectMachine(it.getAttribute('data-val'));};
+  dd.style.display='block';
 }
 function selectMachine(val){
   S.machine = val;
