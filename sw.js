@@ -2,7 +2,7 @@
 // Service Worker — RPAC QC PWA v2
 // Chiến lược: Cache First cho app shell, offline hoàn toàn
 // ══════════════════════════════════════════════════════════════
-var CACHE_VERSION = 'rpac-qc-v2';
+var CACHE_VERSION = 'rpac-qc-v3';
 var APP_SHELL = [
   './',
   './index.html',
