@@ -1070,6 +1070,10 @@ input[type=file]{display:none}
         <input class="h-search" id="hSearch" placeholder="Tìm SO, Item Code, Customer..."
                oninput="onHInput()" autocomplete="off" autocorrect="off" spellcheck="false">
         <button class="h-clr" id="hClr" onclick="clearHSearch()">✕</button>
+        <button id="hSearchAllBtn" onclick="doSearchAll()"
+          style="flex-shrink:0;background:var(--ac);border:none;color:#fff;border-radius:8px;
+          padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);
+          white-space:nowrap;touch-action:manipulation">🔍 Tất cả</button>
       </div>
       <div class="h-filters">
         <select class="h-sel" id="hProc" onchange="onFilterChange()"><option value="">Tất cả công đoạn</option></select>
@@ -1147,6 +1151,7 @@ function gasDoLogin(pwd,ok,err)  { _gasCall('login',{password:pwd},ok,err); }
 function gasGetAppData(ok,err)   { _gasCall('getAppData',{},ok,err); }
 function gasSaveResults(p,ok,err){ _gasCall('saveResults',{payloads:p},ok,err); }
 function gasGetHistory(p,ok,err) { _gasCall('getHistory',{params:p},ok,err); }
+function gasSearchAll(p,ok,err)  { _gasCall('searchAllHistory',{params:p},ok,err); }
 function gasCheckDup(so,pr,ok)   { _gasCall('checkDup',{so:so,process:pr},ok,function(){}); }
 // gasGetPARows — không dùng nữa (PA data đã có trong bootApp)
 // function gasGetPARows(ok,err){ _gasCall('getPayAttentionRows',{},ok,err||function(){}); }
@@ -2237,6 +2242,31 @@ function applyClientFilter(){
 }
 function onHInput(){var v=document.getElementById('hSearch').value;document.getElementById('hClr').classList.toggle('on',v.length>0);clearTimeout(_hSearchTimer);if(H.allLoaded){_hSearchTimer=setTimeout(applyClientFilter,0);}else{_hSearchTimer=setTimeout(function(){_serverLoad(1);},380);}}
 function clearHSearch(){document.getElementById('hSearch').value='';document.getElementById('hClr').classList.remove('on');applyClientFilter();}
+function doSearchAll(){
+  var q=(document.getElementById('hSearch').value||'').trim();
+  var fProc=document.getElementById('hProc').value||'';
+  var fInsp=document.getElementById('hQC').value||'';
+  if(!q&&!fProc&&!fInsp){showToast('Nhập từ khoá để tìm toàn bộ lịch sử','er',3000);return;}
+  if(!S.online){showToast('📴 Cần mạng để tìm toàn bộ lịch sử','er',3000);return;}
+  var btn=document.getElementById('hSearchAllBtn');
+  if(btn){btn.textContent='⏳ Đang tìm...';btn.disabled=true;}
+  showHLoading();
+  gasSearchAll({filter:{q:q,process:fProc,inspector:fInsp}},
+    function(r){
+      if(btn){btn.textContent='🔍 Tất cả';btn.disabled=false;}
+      hideHLoading();
+      if(!r||!r.ok){showToast('⚠️ Lỗi: '+(r&&r.error||''),'er');return;}
+      H.all=r.data||[];H.allLoaded=false;H.pageSize=60;
+      applyClientFilter();
+      showToast('✅ Tìm thấy '+r.total+' phiên trong toàn bộ lịch sử','ok',4000);
+    },
+    function(err){
+      if(btn){btn.textContent='🔍 Tất cả';btn.disabled=false;}
+      hideHLoading();
+      showToast('⚠️ Lỗi kết nối','er');
+    }
+  );
+}
 function onFilterChange(){clearTimeout(_hFilterTimer);clearTimeout(_hSearchTimer);if(H.allLoaded){applyClientFilter();}else{_hFilterTimer=setTimeout(function(){_serverLoad(1);},120);}}
 function gotoPage2(p){var filtered=H._filtered||H.all;var maxP=Math.ceil(filtered.length/H.pageSize);if(p<1||p>maxP)return;H.page=p;var start=(p-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);var f=getHFilter();requestAnimationFrame(function(){renderHistoryList(H.sessions,f.q);renderPagerClient(filtered.length);updateHStat(H.sessions,f);});var sb=document.getElementById('hScrollBody');if(sb)sb.scrollTop=0;}
 function _openHistory(){if(H.allLoaded){applyClientFilter();_bgRefreshHistory();return;}_serverLoad(1);}
