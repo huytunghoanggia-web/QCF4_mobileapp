@@ -2136,20 +2136,26 @@ function doSave(){
   });
   if(empty>0&&!confirm('Còn '+empty+' hạng mục chưa có kết quả. Vẫn lưu?'))return;
   var now=new Date(),soMap=getSOMap();
-  var payloads=S.selectedSOs.map(function(so){
+  // Gom tất cả SO thành 1 payload duy nhất
+  var soJoinedF=S.selectedSOs.join(', ');
+  var icJoinedF=[],lcJoinedF=[],icSetF=Object.create(null),lcSetF=Object.create(null);
+  S.selectedSOs.forEach(function(so){
     var d=soMap[so]||{};var m=S.soMeta[so]||{};
-    var results=[];
-    S.items.forEach(function(it){
-      if(it.isRemark){results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard||'',result:'NOTE',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});}
-      else if(it.isDelta){it.dRows.forEach(function(r){results.push({itemId:it.itemId,itemcheck:it.itemcheck+' — '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});});}
-      else if(it.isDim){it.dimRows.forEach(function(r){results.push({itemId:it.itemId,itemcheck:it.itemcheck+' — '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});});}
-      else{results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard,result:it.result||'',value:it.value||'',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});}
-    });
-    return{so:so,itemCode:d.itemCode||m.itemCode||'',localCustomer:d.localCustomer||m.localCustomer||'',process:S.process,inspector:S.email,operatorId:S.operatorId||'',machine:S.machine||'',lotQty:S.lotQty||'',aqlQty:S.aqlQty||'',aqlAccept:S.aqlAccept||'',timestamp:now.toISOString(),results:results};
+    var ic=d.itemCode||m.itemCode||''; var lc=d.localCustomer||m.localCustomer||'';
+    if(ic&&!icSetF[ic]){icSetF[ic]=true;icJoinedF.push(ic);}
+    if(lc&&!lcSetF[lc]){lcSetF[lc]=true;lcJoinedF.push(lc);}
   });
-  var nSaved=payloads.length*S.items.length;
+  var results=[];
+  S.items.forEach(function(it){
+    if(it.isRemark){results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard||'',result:'NOTE',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});}
+    else if(it.isDelta){it.dRows.forEach(function(r){results.push({itemId:it.itemId,itemcheck:it.itemcheck+' — '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});});}
+    else if(it.isDim){it.dimRows.forEach(function(r){results.push({itemId:it.itemId,itemcheck:it.itemcheck+' — '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});});}
+    else{results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard,result:it.result||'',value:it.value||'',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});}
+  });
+  var payloads=[{so:soJoinedF,itemCode:icJoinedF.join(', '),localCustomer:lcJoinedF.join(', '),process:S.process,inspector:S.email,operatorId:S.operatorId||'',machine:S.machine||'',lotQty:S.lotQty||'',aqlQty:S.aqlQty||'',aqlAccept:S.aqlAccept||'',timestamp:now.toISOString(),results:results}];
+  var nSaved=results.length;
   S.queue.push.apply(S.queue,payloads);saveQueue();
-  _injectSessionToHistory((payloads[0]&&payloads[0].itemCode)||'',(payloads[0]&&payloads[0].localCustomer)||'',S.items.filter(function(it){return it.result==='OK';}).length,S.items.filter(function(it){return it.result==='NG';}).length,S.items.filter(function(it){return it.result==='NA';}).length);
+  _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length);
   showDone(nSaved,!S.online);
   if(S.online)_bgSyncQueue();
   var paRows=[];
