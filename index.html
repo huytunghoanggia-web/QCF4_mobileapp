@@ -1639,7 +1639,22 @@ document.addEventListener('click',function(e){
 function onSOInput(){var v=document.getElementById('soInput').value.trim();document.getElementById('soAddManualBtn').style.display=v.length>0?'block':'none';if(!_soDDopen)openSODD();clearTimeout(_soTimer);_soTimer=setTimeout(function(){renderSODD(document.getElementById('soInput').value);},80);}
 function openManualSOEntry(){var typed=document.getElementById('soInput').value.trim().toUpperCase();document.getElementById('soInput').value='';document.getElementById('soAddManualBtn').style.display='none';closeSODD();document.getElementById('soWrap').style.display='none';document.getElementById('soManualWrap').style.display='block';document.getElementById('manualSO').value=typed;document.getElementById('manualIC').value='';document.getElementById('manualLC').value='';setTimeout(function(){if(typed)document.getElementById('manualIC').focus();else document.getElementById('manualSO').focus();},50);}
 function cancelManualSO(){document.getElementById('soManualWrap').style.display='none';document.getElementById('soWrap').style.display='block';document.getElementById('soAddManualBtn').style.display='none';document.getElementById('soInput').value='';}
-function confirmManualSO(){var so=document.getElementById('manualSO').value.trim().toUpperCase();var ic=document.getElementById('manualIC').value.trim();var lc=document.getElementById('manualLC').value.trim();if(!so){var inp=document.getElementById('manualSO');inp.focus();inp.style.borderColor='var(--ng)';setTimeout(function(){inp.style.borderColor='';},1500);showToast('⚠️ Nhập mã SO trước','er');return;}if(S.selectedSOs.indexOf(so)<0)S.selectedSOs.push(so);S.soMeta[so]={itemCode:ic,localCustomer:lc,manual:true};cancelManualSO();renderSOChips();}
+function confirmManualSO(){
+  var so=document.getElementById('manualSO').value.trim().toUpperCase();
+  var ic=document.getElementById('manualIC').value.trim();
+  var lc=document.getElementById('manualLC').value.trim();
+  function _highlightErr(id,msg){
+    var el=document.getElementById(id);
+    if(el){el.focus();el.style.borderColor='var(--ng)';setTimeout(function(){el.style.borderColor='';},1800);}
+    showToast(msg,'er');
+  }
+  if(!so){_highlightErr('manualSO','⚠️ Nhập mã SO trước');return;}
+  if(!ic){_highlightErr('manualIC','⚠️ Nhập mã Item Code');return;}
+  if(!lc){_highlightErr('manualLC','⚠️ Nhập tên khách hàng');return;}
+  if(S.selectedSOs.indexOf(so)<0) S.selectedSOs.push(so);
+  S.soMeta[so]={itemCode:ic,localCustomer:lc,manual:true};
+  cancelManualSO();renderSOChips();
+}
 function onManualSOInput(){document.getElementById('manualSO').style.borderColor='';}
 function onSOKey(e){if(e.key==='Enter'){e.preventDefault();var v=document.getElementById('soInput').value.trim().toUpperCase();if(!v)return;if(S.selectedSOs.indexOf(v)<0){S.selectedSOs.push(v);var soMap=getSOMap();if(!soMap[v])S.soMeta[v]={itemCode:'',localCustomer:'',manual:true};}document.getElementById('soInput').value='';renderSOChips();renderSODD('');}if(e.key==='Escape'){closeSODD();document.getElementById('soInput').blur();}}
 function toggleSO(so){var idx=S.selectedSOs.indexOf(so);if(idx>=0){S.selectedSOs.splice(idx,1);delete S.soMeta[so];}else{S.selectedSOs.push(so);var soMap=getSOMap();if(!soMap[so])S.soMeta[so]={itemCode:'',localCustomer:'',manual:true};}renderSOChips();closeSODD();var inp=document.getElementById('soInput');inp.value='';document.getElementById('soAddManualBtn').style.display='none';}
