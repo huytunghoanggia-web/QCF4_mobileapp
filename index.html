@@ -2902,18 +2902,40 @@ function _renderPABox(){
 
   if(!matches.length){ box.innerHTML=''; box.classList.remove('on'); _paUnblock(); return; }
 
+  // ── Tách HOLD (mỗi cái 1 ô) và NOTE (gom theo scope) ──────
+  var holdItems=[], noteGroups=Object.create(null);
+  // noteGroups key = "scopeLabel|scopeVal"
+  matches.forEach(function(m){
+    if(m.isHold){ holdItems.push(m); return; }
+    var gKey = m.scopeLabel+'|'+m.scopeVal;
+    if(!noteGroups[gKey]) noteGroups[gKey]={scopeLabel:m.scopeLabel,scopeVal:m.scopeVal,notes:[]};
+    noteGroups[gKey].notes.push(m);
+  });
+
   var html='', hasActiveHold=false;
-  matches.forEach(function(m,idx){
+
+  // ── Render NOTE groups (gom nhiều ghi chú cùng scope) ──────
+  Object.keys(noteGroups).forEach(function(gKey){
+    var g=noteGroups[gKey];
+    html+='<div class="pa-item warn">';
+    html+='<div class="pa-item-head"><span class="pa-item-badge">⚠️ LƯU Ý</span>'
+         +'<span class="pa-item-scope">'+esc(g.scopeLabel)+': '+esc(g.scopeVal)+'</span></div>';
+    g.notes.forEach(function(m,ni){
+      if(ni>0) html+='<div style="border-top:1px solid #fde68a;margin:6px 0"></div>';
+      html+='<div class="pa-item-remark">'+esc(m.remark)+'</div>';
+      if(m.authorEmail||m.authorTs){
+        html+='<div class="pa-item-meta">📣 '+esc(m.authorEmail||'')+(m.authorTs?' · 🕐 '+esc(m.authorTs):'')+'</div>';
+      }
+      if(m.photoRemark){
+        html+='<a class="pa-photo-link" href="'+esc(m.photoRemark)+'" target="_blank">🖼️ Xem ảnh ghi chú</a>';
+      }
+    });
+    html+='</div>';
+  });
+
+  // ── Render HOLD items (mỗi cái 1 ô riêng) ──────────────────
+  holdItems.forEach(function(m,idx){
     if(!m.isHold){
-      html+='<div class="pa-item warn">'
-           +'<div class="pa-item-head"><span class="pa-item-badge">⚠️ LƯU Ý</span>'
-           +'<span class="pa-item-scope">'+esc(m.scopeLabel)+': '+esc(m.scopeVal)+'</span></div>'
-           +'<div class="pa-item-remark">'+esc(m.remark)+'</div>'
-           +(m.authorEmail||m.authorTs ? '<div class="pa-item-meta">📣 '+esc(m.authorEmail||'')+(m.authorTs?' · 🕐 '+esc(m.authorTs):'')+'</div>' : '')
-           +(m.photoRemark ? '<a class="pa-photo-link" href="'+esc(m.photoRemark)+'" target="_blank">🖼️ Xem ảnh ghi chú</a>' : '')
-           +'</div>';
-      return;
-    }
     // HOLD item
     var unholded=m.isUnholded;
     var itemCls='pa-item hold'+(unholded?' unholded':'');
