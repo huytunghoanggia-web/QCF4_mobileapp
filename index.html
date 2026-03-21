@@ -574,7 +574,7 @@ input[type=file]{display:none}
 .h-table tbody tr.row-ng{border-left:3px solid var(--ng)}
 .h-table tbody tr.row-pass{border-left:3px solid var(--ok)}
 .h-table td{padding:9px 10px;vertical-align:top;color:var(--txt2);border:none}
-.h-td-time{white-space:nowrap;font-family:var(--mono);font-size:11px;color:var(--txt3);min-width:72px}
+.h-td-time{white-space:nowrap;font-family:var(--mono);font-size:12px;color:var(--txt);min-width:82px;font-weight:600}
 .h-td-time .h-time{font-size:13px;font-weight:700;color:var(--txt);display:block}
 .h-td-time .h-date{font-size:10px;color:var(--txt3)}
 .h-td-proc .h-proc-badge{display:inline-block;background:#eff6ff;color:var(--ac);border:1px solid #bfdbfe;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}
@@ -2400,9 +2400,20 @@ function renderHistoryList(data,q){
     var sess=data[i];
     var isNg=sess.ng>0;
 
-    // Thời gian: dùng time + date riêng từ server
-    var timePart=sess.time||'';
-    var datePart=sess.date||'';
+    // Thời gian: chỉ hiện ngày dd/MM/yyyy
+    // sess.date = "21/03/2026", sess.time = "HH:mm:ss"
+    // Nếu date bị lỗi (dạng Date object string) thì parse lại từ tsNum
+    var datePart='';
+    if(sess.date && sess.date.indexOf('/')>=0 && sess.date.length<=10){
+      datePart=sess.date; // đã đúng định dạng dd/MM/yyyy
+    } else if(sess.tsNum && sess.tsNum>0){
+      var _d=new Date(sess.tsNum);
+      datePart=('0'+_d.getDate()).slice(-2)+'/'+('0'+(_d.getMonth()+1)).slice(-2)+'/'+_d.getFullYear();
+    } else if(sess.date){
+      // Thử parse từ string bất kỳ
+      try{var _d2=new Date(sess.date);if(!isNaN(_d2.getTime())){datePart=('0'+_d2.getDate()).slice(-2)+'/'+('0'+(_d2.getMonth()+1)).slice(-2)+'/'+_d2.getFullYear();}}catch(e){}
+    }
+    if(!datePart) datePart='—';
 
     // SO: nếu nhiều SO thì show tags
     var rawSO=sess.soDisplay||sess.so||'';
@@ -2430,7 +2441,7 @@ function renderHistoryList(data,q){
       +'</div>';
 
     rows.push('<tr class="'+(isNg?'row-ng':'row-pass')+'" data-idx="'+i+'">'
-      +'<td class="h-td-time"><span class="h-time">'+esc(timePart)+'</span><span class="h-date">'+esc(datePart)+'</span></td>'
+      +'<td class="h-td-time">'+esc(datePart)+'</td>'
       +'<td class="h-td-proc"><span class="h-proc-badge">'+esc(sess.process||'-')+'</span></td>'
       +'<td class="h-td-so">'+soCell+'</td>'
       +'<td class="h-td-ic">'+icCell+'</td>'
