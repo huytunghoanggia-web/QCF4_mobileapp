@@ -2441,7 +2441,7 @@ function renderHistoryList(data,q){
       +'</div>';
 
     rows.push('<tr class="'+(isNg?'row-ng':'row-pass')+'" data-idx="'+i+'">'
-      +'<td class="h-td-time">'+esc(datePart)+'</td>'
+      +'<td class="h-td-time"><span class="h-time">'+esc(datePart)+'</span>'+(sess.time&&sess.time.length<=8?'<span class="h-date">'+esc(sess.time.slice(0,5))+'</span>':'')+'</td>'
       +'<td class="h-td-proc"><span class="h-proc-badge">'+esc(sess.process||'-')+'</span></td>'
       +'<td class="h-td-so">'+soCell+'</td>'
       +'<td class="h-td-ic">'+icCell+'</td>'
@@ -2475,7 +2475,15 @@ function openDrawer(sess){
     var _dd=new Date(sess.tsNum);
     _drDate=('0'+_dd.getDate()).slice(-2)+'/'+('0'+(_dd.getMonth()+1)).slice(-2)+'/'+_dd.getFullYear();
   }
-  var checkTime = _drDate || '';
+  // Giờ: lấy từ sess.time nếu hợp lệ (HH:mm:ss), fallback từ tsNum
+  var _drTime='';
+  if(sess.time && /^\d{2}:\d{2}/.test(sess.time)){
+    _drTime=sess.time.slice(0,5); // HH:mm
+  } else if(sess.tsNum && sess.tsNum>0){
+    var _dt=new Date(sess.tsNum);
+    _drTime=('0'+_dt.getHours()).slice(-2)+':'+('0'+_dt.getMinutes()).slice(-2);
+  }
+  var checkTime = (_drDate&&_drTime) ? _drDate+' '+_drTime : (_drDate||_drTime||'');
   document.getElementById('drBody').innerHTML=
     // Tóm tắt OK/NG/NA + thời gian
     '<div class="sum-grid" style="margin-bottom:8px">'
