@@ -2467,7 +2467,15 @@ function openDrawer(sess){
   if(sess.soArr&&sess.soArr.length>1){infoHTML+='<div style="background:#eef2ff;border-radius:8px;padding:8px 12px;margin-bottom:8px"><div style="font-size:10px;color:var(--ac);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:4px">Sales Orders ('+sess.soArr.length+')</div><div style="display:flex;flex-wrap:wrap;gap:4px">'+sess.soArr.map(function(s){return'<span style="font-family:var(--mono);font-size:12px;background:#fff;border:1px solid #c7d2fe;border-radius:5px;padding:2px 8px;color:var(--ac);font-weight:600">'+esc(s)+'</span>';}).join('')+'</div></div>';}
   if(sess.itemCode||sess.localCustomer)infoHTML+='<div style="background:#f9f9fb;border-radius:8px;padding:9px 12px;margin-bottom:10px">'+(sess.itemCode?'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Item Code</div><div style="font-family:var(--mono);margin-bottom:'+(sess.localCustomer?6:0)+'px">'+esc(sess.itemCode)+'</div>':'')+(sess.localCustomer?'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Local Customer</div><div>'+esc(sess.localCustomer)+'</div>':'')+'</div>';
   // Thời gian check
-  var checkTime = [sess.time, sess.date].filter(Boolean).join(' ');
+  // Parse ngày từ sess - tránh lỗi "Sat Dec 30 1899"
+  var _drDate='';
+  if(sess.date && sess.date.indexOf('/')>=0 && sess.date.length<=10){
+    _drDate=sess.date;
+  } else if(sess.tsNum && sess.tsNum>0){
+    var _dd=new Date(sess.tsNum);
+    _drDate=('0'+_dd.getDate()).slice(-2)+'/'+('0'+(_dd.getMonth()+1)).slice(-2)+'/'+_dd.getFullYear();
+  }
+  var checkTime = _drDate || '';
   document.getElementById('drBody').innerHTML=
     // Tóm tắt OK/NG/NA + thời gian
     '<div class="sum-grid" style="margin-bottom:8px">'
