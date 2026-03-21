@@ -1194,7 +1194,7 @@ function doLoginClick(){
       setLoginLoading(false);
       if(r && r.ok){
         // Lưu session vào localStorage
-        try{ localStorage.setItem(LKEY, JSON.stringify({email:r.email,name:r.name,pwd:pwd,ts:Date.now()})); }catch(e){}
+        try{ localStorage.setItem(LKEY, JSON.stringify({email:r.email,name:r.name,pwd:pwd,ts:Date.now()})); }catch(e){} // session vĩnh viễn — chỉ xóa khi đổi password
         onLoginSuccess(r.email, r.name);
       } else {
         showLoginErr(r && r.error ? r.error : 'Đăng nhập thất bại.');
@@ -1255,33 +1255,44 @@ document.addEventListener('click',function(e){
 // ══════════════════════════════════════════════════════════════
 window.onload = function(){
   loadQueue(); watchNetwork(); startClock(); initPWA();
-  // Khôi phục session từ localStorage nếu còn — VERIFY với server trước
   try{
     var saved = JSON.parse(localStorage.getItem(LKEY)||'null');
-    if(saved && saved.email && (Date.now()-saved.ts < 8*3600*1000)){
-      // Hiện màn hình loading trong khi verify
-      showOverlay('Đang xác thực...','Vui lòng chờ...');
-      gasVerifySession(
-        saved.email, saved.pwd||'',
-        function(r){
-          hideOverlay();
-          if(r && r.ok){
-            // Session hợp lệ — cập nhật name mới nhất từ sheet
-            try{ localStorage.setItem(LKEY, JSON.stringify({email:r.email,name:r.name,pwd:saved.pwd||'',ts:saved.ts})); }catch(e){}
-            onLoginSuccess(r.email, r.name);
-          } else {
-            // Session không còn hợp lệ (đổi pass, xóa user...)
-            try{ localStorage.removeItem(LKEY); }catch(e){}
-            hideOverlay();
-            _showLoginWithMsg(r && r.error ? '🔒 ' + r.error + ' Vui lòng đăng nhập lại.' : '🔒 Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+    if(saved && saved.email && saved.pwd){
+      // Có session lưu → vào app ngay không cần chờ verify
+      onLoginSuccess(saved.email, saved.name||saved.email.split('@')[0]);
+      // Verify ngầm với server (chỉ để kiểm tra password có đổi không)
+      // Không block UI — chạy sau khi đã vào app
+      setTimeout(function(){
+        if(!S.online) return; // Offline → bỏ qua verify
+        gasVerifySession(
+          saved.email, saved.pwd,
+          function(r){
+            if(r && r.ok){
+              // Password vẫn đúng — cập nhật name mới nhất
+              try{ localStorage.setItem(LKEY, JSON.stringify({
+                email:r.email, name:r.name, pwd:saved.pwd, ts:Date.now()
+              })); }catch(e){}
+              // Cập nhật tên hiển thị nếu khác
+              if(r.name && r.name !== S.name){
+                S.name = r.name;
+                var em = document.getElementById('userEm');
+                var av = document.getElementById('userAv');
+                if(em) em.textContent = r.name.split(' ').slice(-1)[0];
+                if(av) av.textContent = (r.name||'?').charAt(0).toUpperCase();
+              }
+            } else {
+              // Password đã bị đổi → buộc đăng nhập lại
+              try{ localStorage.removeItem(LKEY); }catch(e){}
+              S.email=''; S.name='';
+              document.getElementById('appShell').classList.remove('on');
+              _showLoginWithMsg('🔒 Mật khẩu đã được thay đổi. Vui lòng đăng nhập lại.');
+            }
+          },
+          function(){
+            // Lỗi mạng → giữ nguyên session, không làm gì
           }
-        },
-        function(){
-          // Lỗi mạng khi verify — cho vào luôn để không block offline
-          hideOverlay();
-          onLoginSuccess(saved.email, saved.name||saved.email.split('@')[0]);
-        }
-      );
+        );
+      }, 3000); // Verify sau 3 giây để không ảnh hưởng boot
       return;
     }
   }catch(e){}
