@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#4630EB">
 <!-- PWA -->
 <meta name="mobile-web-app-capable" content="yes">
@@ -196,8 +196,8 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
 #pgHistory.on{display:flex!important}
 
 /* NAV */
-.nav{background:#ffffff;border-top:1px solid var(--border);display:flex;flex-shrink:0;box-shadow:0 -1px 4px rgba(0,0,0,.05)}
-.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:9px 4px;cursor:pointer;border:none;background:none;color:var(--txt3);font-family:var(--font);font-size:10px;font-weight:600;position:relative;touch-action:manipulation}
+.nav{background:#ffffff;border-top:1px solid var(--border);display:flex;flex-shrink:0;box-shadow:0 -1px 4px rgba(0,0,0,.05);padding-bottom:env(safe-area-inset-bottom,0px)}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:9px 4px 8px;cursor:pointer;border:none;background:none;color:var(--txt3);font-family:var(--font);font-size:10px;font-weight:600;position:relative;touch-action:manipulation}
 .nb.on{color:var(--ac);font-weight:700}
 .nb.on::before{content:'';position:absolute;top:0;left:25%;right:25%;height:3px;background:var(--ac);border-radius:0 0 4px 4px}
 .nb-ico{font-size:18px;line-height:1}
@@ -233,9 +233,9 @@ textarea{resize:none;line-height:1.5}
 
 /* BOTTOM BAR CỐ ĐỊNH SCREEN B */
 .sb-bottom-bar{
-  display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
+  display:none;position:fixed;bottom:calc(56px + env(safe-area-inset-bottom,0px));left:0;right:0;z-index:200;
   background:#ffffff;border-top:1.5px solid var(--border);
-  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  padding:10px 12px 10px;
   display:none;gap:8px;box-shadow:0 -2px 12px rgba(0,0,0,.08);
 }
 .sb-bottom-bar.on{display:flex}
@@ -1034,7 +1034,7 @@ input[type=file]{display:none}
     </div>
     <div style="font-size:12px;color:var(--txt2)" id="bPg"></div>
   </div>
-  <div id="itemList" style="padding-bottom:72px"></div>
+  <div id="itemList" style="padding-bottom:calc(120px + env(safe-area-inset-bottom,0px))"></div>
 </div><!-- /sB -->
 
 <!-- Bottom bar cố định cho Screen B -->
