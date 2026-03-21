@@ -2935,7 +2935,6 @@ function _renderPABox(){
 
   // ── Render HOLD items (mỗi cái 1 ô riêng) ──────────────────
   holdItems.forEach(function(m,idx){
-    if(!m.isHold){
     // HOLD item
     var unholded=m.isUnholded;
     var itemCls='pa-item hold'+(unholded?' unholded':'');
