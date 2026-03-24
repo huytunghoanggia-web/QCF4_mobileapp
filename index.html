@@ -1310,47 +1310,80 @@ function _showLoginWithMsg(msg){
 }
 
 function bootApp(){
-  showOverlay('Đang tải dữ liệu...','Kết nối Google Sheet...');
-  gasGetAppData(
-    function(data){
-      hideOverlay();
-      if(!data){ showErrBox('Không nhận được dữ liệu từ server.'); return; }
-      if(data.error) showErrBox(data.error);
-      if(data.ok){
-        S.boot = data;
-        _soUppCache = null;
-        _syncPARowsFromBoot();
-        buildDropdowns();
-        _buildMachineList(data.machineList||[]);
-        startPAPolling();
-        // ── PWA: cache boot data để dùng offline ──
-        try{
-          var cachePayload={data:data,ts:Date.now()};
-          localStorage.setItem('rpac_boot_cache', JSON.stringify(cachePayload));
-        }catch(e){}
-      }
-    },
-    function(err){
-      hideOverlay();
-      // ── PWA: thử restore từ cache offline ──
-      try{
-        var cached=JSON.parse(localStorage.getItem('rpac_boot_cache')||'null');
-        var MAX_CACHE_AGE=7*24*60*60*1000; // 7 ngày
-        if(cached && cached.data && (Date.now()-cached.ts)<MAX_CACHE_AGE){
-          S.boot=cached.data;
-          _soUppCache=null;
-          _syncPARowsFromBoot();
-          buildDropdowns();
-          _buildMachineList(cached.data.machineList||[]);
-          var cachedAge=Math.round((Date.now()-cached.ts)/3600000);
-          var ageStr=cachedAge<1?'vừa xong':cachedAge+'h trước';
-          showToast('📴 Offline — dữ liệu cache ('+ageStr+')','',5000);
-          return;
+  // ── Stale-While-Revalidate boot ────────────────────────────
+  // Mục tiêu: hiện app ngay từ cache, fetch mới ngầm trong nền
+  // Chỉ block UI (overlay) khi thực sự không có cache nào
+  var FRESH_TTL  = 4  * 60 * 60 * 1000; // < 4h  → dùng cache, fetch ngầm yên lặng
+  var STALE_TTL  = 7  * 24 * 60 * 60 * 1000; // < 7 ngày → dùng cache, fetch ngầm + toast
+  var cached = null;
+  try{ cached = JSON.parse(localStorage.getItem('rpac_boot_cache')||'null'); }catch(e){}
+
+  var cacheAge = cached ? (Date.now() - (cached.ts||0)) : Infinity;
+  var hasFreshCache  = cached && cached.data && cacheAge < FRESH_TTL;
+  var hasStaleCache  = cached && cached.data && cacheAge < STALE_TTL;
+
+  // ── Hàm apply data vào app (dùng chung cho cache và network) ──
+  function _applyBootData(data, fromCache){
+    S.boot = data;
+    _soUppCache = null;
+    _syncPARowsFromBoot();
+    buildDropdowns();
+    _buildMachineList(data.machineList||[]);
+    if(!fromCache) startPAPolling();
+    try{
+      localStorage.setItem('rpac_boot_cache', JSON.stringify({data:data, ts:Date.now()}));
+    }catch(e){}
+  }
+
+  // ── Hàm fetch từ GAS ──
+  function _fetchFromGAS(isBgRefresh){
+    gasGetAppData(
+      function(data){
+        if(!isBgRefresh) hideOverlay();
+        if(!data){ if(!isBgRefresh) showErrBox('Không nhận được dữ liệu từ server.'); return; }
+        if(data.error){ if(!isBgRefresh) showErrBox(data.error); return; }
+        if(data.ok){
+          _applyBootData(data, false);
+          if(isBgRefresh){
+            // Cập nhật ngầm thành công — chỉ toast nhẹ nếu cache đã cũ
+            if(!hasFreshCache){
+              var now=new Date();
+              showToast('✅ Dữ liệu đã cập nhật lúc '+now.getHours()+':'+('0'+now.getMinutes()).slice(-2),'ok',3000);
+            }
+          }
         }
-      }catch(e){}
-      showErrBox((err&&err.message)?err.message:String(err||'Lỗi không xác định'));
-    }
-  );
+      },
+      function(err){
+        if(!isBgRefresh){
+          hideOverlay();
+          // Không có cache nào → báo lỗi
+          showErrBox((err&&err.message)?err.message:String(err||'Lỗi không xác định'));
+        }
+        // Nếu là bg refresh lỗi → im lặng, dữ liệu cache vẫn đang dùng
+      }
+    );
+  }
+
+  if(hasFreshCache){
+    // Cache còn fresh (< 4h) → vào app ngay lập tức, fetch ngầm yên lặng
+    _applyBootData(cached.data, true);
+    startPAPollingImmediate(); // poll ngay để lấy PA mới nhất, không chờ 10s
+    if(S.online) setTimeout(function(){ _fetchFromGAS(true); }, 1500);
+
+  } else if(hasStaleCache){
+    // Cache hơi cũ (4h–7 ngày) → vào app ngay, fetch ngầm + thông báo nhẹ
+    _applyBootData(cached.data, true);
+    startPAPollingImmediate(); // poll ngay để lấy PA mới nhất
+    var ageH = Math.round(cacheAge/3600000);
+    var ageStr = ageH < 1 ? 'vừa xong' : ageH + 'h trước';
+    showToast('⏳ Dữ liệu cache ('+ ageStr +') — đang cập nhật...', '', 4000);
+    if(S.online) setTimeout(function(){ _fetchFromGAS(true); }, 800);
+
+  } else {
+    // Không có cache → flow cũ: overlay + chờ GAS
+    showOverlay('Đang tải dữ liệu...','Kết nối Google Sheet...');
+    _fetchFromGAS(false);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1580,11 +1613,12 @@ function showScreen(s){
   if(s==='B'){
     showStickyPB();
     document.getElementById('sBBar').classList.add('on');
-    stopPAPolling();   // dừng poll khi đang kiểm tra
+    // Không stopPAPolling() — giữ polling chạy ở Screen B
+    // để QC vẫn nhận notification HOLD/NOTE mới khi đang nhập kết quả
   } else {
     hideStickyPB();
     document.getElementById('sBBar').classList.remove('on');
-    if(s==='A') startPAPolling(); // bật lại khi về Thông tin
+    if(s==='A' && !_paPollActive) startPAPolling(); // bật lại nếu chưa chạy
   }
 }
 
@@ -2661,6 +2695,13 @@ function startPAPolling(){
   _paPollActive = true;
   _schedulePAPoll();
   _scheduleHoldRemind();
+}
+function startPAPollingImmediate(){
+  // Boot từ cache → poll ngay lập tức thay vì chờ 10s
+  if(_paPollActive) return;
+  _paPollActive = true;
+  _scheduleHoldRemind();
+  setTimeout(_doPAPoll, 500); // delay nhỏ để UI render xong
 }
 function stopPAPolling(){
   _paPollActive = false;
