@@ -1145,12 +1145,24 @@ function _gasCall(action, body, ok, err) {
   var payload = Object.assign({action: action}, body||{});
   fetch(GAS_URL, {
     method: 'POST',
-    headers: {'Content-Type':'text/plain'},  // GAS yêu cầu text/plain để tránh preflight CORS
+    headers: {'Content-Type':'text/plain'},
     body: JSON.stringify(payload)
   })
-  .then(function(r){ return r.json(); })
-  .then(function(data){ if(ok) ok(data); })
-  .catch(function(e){ if(err) err(e); else console.error('GAS call error:',e); });
+  .then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status+' '+r.statusText);
+    return r.json();
+  })
+  .then(function(data){
+    if(data && data.ok === false && data.error){
+      console.error('[GAS]['+action+'] error:', data.error);
+    }
+    if(ok) ok(data);
+  })
+  .catch(function(e){
+    console.error('[GAS]['+action+'] failed:', e.message||e);
+    if(err) err(e);
+    else showToast('❌ ['+action+'] '+( e.message||'Lỗi kết nối'),'er',5000);
+  });
 }
 
 function gasDoLogin(pwd,ok,err)  { _gasCall('login',{password:pwd},ok,err); }
@@ -2751,6 +2763,16 @@ function reCheckFromSession(){
   showScreen('B');
   showToast('✅ Đã điền lại thông tin — '+S.selectedSOs[0]+' · '+proc, 'ok', 3500);
 }
+
+
+// UI HELPERS
+function showOverlay(t,s){document.getElementById('ovTitle').textContent=t;document.getElementById('ovSub').textContent=s||'';document.getElementById('overlay').classList.add('on');}
+function hideOverlay(){document.getElementById('overlay').classList.remove('on');}
+var _toastT=null;
+function showToast(msg,cls,dur){var el=document.getElementById('toast');el.textContent=msg;el.className='toast on '+(cls||'');clearTimeout(_toastT);_toastT=setTimeout(function(){el.classList.remove('on');},dur||3000);}
+function pad(n){return n<10?'0'+n:''+n;}
+function esc(s){if(s===null||s===undefined)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function driveViewUrl(url){if(!url)return'#';if(url.indexOf('data:image')===0)return'#';var m=url.match(/\/d\/([a-zA-Z0-9_-]{10,})/)||url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);if(m)return'https://drive.google.com/file/d/'+m[1]+'/view';return url;}
 
 // ══════════════════════════════════════════════════════════════
 // NOTE MODE
