@@ -1116,7 +1116,7 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbzYGU6HRLlBUlAqTgAFbrc0ma_D98eDz5Nafe6HxweEKKtAISMtV0P4EHqYJmz5txB7cQ/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwhPpf336HebgBaFNHF4hrVZGwHp_102w8UAuDV-Wyo2JGRIFfJTOQ4H_pc0resiU49rQ/exec';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -2641,36 +2641,52 @@ var _activeDrawerSess = null;
 function openDrawer(sess){
   _activeDrawerSess = sess;
 
-  // Nếu chưa load items (lazy) → show skeleton rồi fetch
-  if(sess._dataFileId && !sess._loaded){
-    // Capture sess tại thời điểm này bằng closure
+  // Luôn fetch items từ GAS khi có _dataFileId (không dùng cache items)
+  // Lý do: items cache có thể null, stale, hoặc bị lệch row
+  // Chỉ dùng items có sẵn nếu là session local (_local:true) vừa tạo trong phiên này
+  var needFetch = sess._dataFileId && !sess._local;
+
+  if(needFetch){
+    // Capture sess vào closure để tránh race condition khi user click nhiều row
     (function(capturedSess){
+      // Hiện drawer skeleton ngay
       document.getElementById('drawerBg').classList.add('on');
-      document.getElementById('drTitle').textContent = capturedSess.so || '...';
+      document.getElementById('drTitle').textContent =
+        ((capturedSess.soArr && capturedSess.soArr.length > 1)
+          ? capturedSess.soArr.join(', ') : capturedSess.so) +
+        (capturedSess.itemCode ? ' - ' + capturedSess.itemCode : '');
       document.getElementById('drSub').textContent =
         [capturedSess.localCustomer, capturedSess.process, capturedSess.inspector, capturedSess.date]
         .filter(Boolean).join(' · ');
       document.getElementById('drBody').innerHTML =
-        '<div style="padding:32px;text-align:center;color:var(--txt3)">' +
-        '<div class="h-spinner" style="margin:0 auto 12px"></div>Đang tải hạng mục...</div>';
+        '<div style="padding:40px 16px;text-align:center;color:var(--txt3)">' +
+        '<div class="h-spinner" style="margin:0 auto 14px"></div>' +
+        '<div style="font-size:13px">Đang tải hạng mục...</div></div>';
 
       _gasCall('loadItems',
-        {params:{fileId:capturedSess._dataFileId, startRow:capturedSess._startRow, endRow:capturedSess._endRow}},
+        {params:{
+          fileId:   capturedSess._dataFileId,
+          startRow: capturedSess._startRow,
+          endRow:   capturedSess._endRow
+        }},
         function(r){
-          capturedSess._loaded = true;
-          capturedSess.items   = (r && r.ok && Array.isArray(r.items)) ? r.items : [];
-          // Chỉ render nếu user chưa mở session khác
-          if(_activeDrawerSess === capturedSess) _renderDrawer(capturedSess);
+          // Chỉ render nếu user chưa click sang session khác
+          if(_activeDrawerSess !== capturedSess) return;
+          capturedSess.items = (r && r.ok && Array.isArray(r.items)) ? r.items : [];
+          _renderDrawer(capturedSess);
         },
-        function(){
-          capturedSess._loaded = true;
-          capturedSess.items   = [];
-          if(_activeDrawerSess === capturedSess) _renderDrawer(capturedSess);
+        function(err){
+          if(_activeDrawerSess !== capturedSess) return;
+          capturedSess.items = [];
+          _renderDrawer(capturedSess);
+          showToast('⚠️ Không tải được hạng mục: ' + (err&&err.message||'lỗi mạng'), 'er', 4000);
         }
       );
     })(sess);
     return;
   }
+
+  // Session local (_local:true): items đã có sẵn trong RAM → render ngay
   _renderDrawer(sess);
 }
 
