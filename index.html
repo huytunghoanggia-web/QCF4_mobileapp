@@ -2426,13 +2426,49 @@ function doSearchAll(){
 }
 function onFilterChange(){clearTimeout(_hFilterTimer);clearTimeout(_hSearchTimer);if(H.allLoaded){applyClientFilter();}else{_hFilterTimer=setTimeout(function(){_serverLoad(1);},120);}}
 function gotoPage2(p){var filtered=H._filtered||H.all;var maxP=Math.ceil(filtered.length/H.pageSize);if(p<1||p>maxP)return;H.page=p;var start=(p-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);var f=getHFilter();requestAnimationFrame(function(){renderHistoryList(H.sessions,f.q);renderPagerClient(filtered.length);updateHStat(H.sessions,f);});var sb=document.getElementById('hScrollBody');if(sb)sb.scrollTop=0;}
-function _openHistory(){if(H.allLoaded){applyClientFilter();_bgRefreshHistory();return;}_serverLoad(1);}
+function _openHistory(){
+  // Hiện cache ngay nếu có, rồi refresh ngầm
+  var hc=null;
+  try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
+  var CACHE_TTL = 10*60*1000; // 10 phút
+  if(hc && hc.all && hc.all.length && (Date.now()-(hc.ts||0)) < CACHE_TTL){
+    H.all=hc.all; H.inspList=hc.inspList||[]; H.allLoaded=true; H.pageSize=60;
+    _rebuildDropdowns(); applyClientFilter();
+    _bgRefreshHistory(); // refresh ngầm
+    return;
+  }
+  if(H.allLoaded){applyClientFilter();_bgRefreshHistory();return;}
+  _serverLoad(1);
+}
 function _serverLoad(page){
-  if(!S.online){document.getElementById('hList').innerHTML='<div class="empty"><span class="empty-ico">📵</span>Cần internet để xem lịch sử</div>';document.getElementById('pager').style.display='none';return;}
-  var reqId=++_hReqId;showHLoading();
-  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,pageSize:999},
-    function(r){if(reqId!==_hReqId)return;if(!r||!r.ok){showToast('⚠️ Lỗi tải lịch sử','er');hideHLoading();return;}var raw=r.data||[];H.all=raw.slice(0,300);H.allLoaded=true;H.pageSize=60;if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}applyClientFilter();},
-    function(){showToast('⚠️ Lỗi kết nối','er');hideHLoading();}
+  if(!S.online){
+    // Offline → thử cache
+    var hc=null;
+    try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
+    if(hc&&hc.all&&hc.all.length){
+      H.all=hc.all;H.inspList=hc.inspList||[];H.allLoaded=true;H.pageSize=60;
+      _rebuildDropdowns();applyClientFilter();
+      showToast('📴 Lịch sử offline ('+hc.all.length+' phiên)','',3000);
+    } else {
+      document.getElementById('hList').innerHTML='<div class="empty"><span class="empty-ico">📵</span>Cần internet để xem lịch sử</div>';
+      document.getElementById('pager').style.display='none';
+    }
+    return;
+  }
+  var reqId=++_hReqId; showHLoading();
+  // dayLimit:6 — chỉ lấy 6 ngày gần nhất, nhanh hơn nhiều
+  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,dayLimit:6},
+    function(r){
+      if(reqId!==_hReqId)return;
+      hideHLoading();
+      if(!r||!r.ok){showToast('⚠️ Lỗi tải lịch sử','er');return;}
+      var raw=r.data||[];
+      H.all=raw; H.allLoaded=true; H.pageSize=60;
+      if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
+      applyClientFilter();
+      try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:raw.slice(0,200),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
+    },
+    function(){hideHLoading();showToast('⚠️ Lỗi kết nối','er');}
   );
 }
 function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(function(){
@@ -2449,15 +2485,14 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
     return;
   }
   var reqId=++_hReqId;var statEl=document.getElementById('hStat');if(statEl)statEl.style.opacity='0.55';
-  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,pageSize:999},function(r){
+  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,dayLimit:6},function(r){
     if(reqId!==_hReqId)return;if(statEl)statEl.style.opacity='';if(!r||!r.ok)return;
-    var newAll300=(r.data||[]).slice(0,300);
-    var changed=(newAll300.length!==H.all.length)||(newAll300.length>0&&H.all.length>0&&newAll300[0].tsNum!==H.all[0].tsNum);
-    H.all=newAll300;
+    var newAll=(r.data||[]);
+    var changed=(newAll.length!==H.all.length)||(newAll.length>0&&H.all.length>0&&newAll[0].tsNum!==H.all[0].tsNum);
+    H.all=newAll;
     if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
     if(changed)applyClientFilter();
-    // PWA: cache history
-    try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:newAll300.slice(0,100),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
+    try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:newAll.slice(0,200),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
   },function(){if(statEl)statEl.style.opacity='';});
 },300);}
 var _machineList = [];
@@ -2608,6 +2643,25 @@ function updateHStat(data,f){var ngCnt=0;for(var i=0;i<data.length;i++){if(data[
 var _drCurrentSess = null; // session đang hiển thị trong drawer
 function openDrawer(sess){
   _drCurrentSess = sess;
+  // Nếu items chưa load (lazy) → load trước rồi mới render
+  if(sess._dataFileId && (!sess.items || sess.items.length === 0)){
+    document.getElementById('drawerBg').classList.add('on');
+    document.getElementById('drTitle').textContent = sess.so || '...';
+    document.getElementById('drSub').textContent = 'Đang tải chi tiết...';
+    document.getElementById('drBody').innerHTML = '<div style="padding:32px;text-align:center;color:var(--txt3)"><div class="h-spinner" style="margin:0 auto 12px"></div>Đang tải hạng mục...</div>';
+    document.getElementById('drFooter').style.display = 'none';
+    _gasCall('loadItems', {params:{fileId:sess._dataFileId,startRow:sess._startRow,endRow:sess._endRow}},
+      function(r){
+        if(r && r.ok && r.items) sess.items = r.items;
+        _renderDrawer(sess);
+      },
+      function(){ _renderDrawer(sess); }
+    );
+    return;
+  }
+  _renderDrawer(sess);
+}
+function _renderDrawer(sess){
   var soLabel=(sess.soArr&&sess.soArr.length>1)?sess.soArr.join(', '):sess.so;
   document.getElementById('drTitle').textContent=soLabel+(sess.itemCode?' - '+sess.itemCode:'');
   document.getElementById('drSub').textContent=[sess.localCustomer,sess.process,sess.inspector,sess.date].filter(Boolean).join(' · ');
