@@ -1325,6 +1325,20 @@ function bootApp(){
   try{ cached = JSON.parse(localStorage.getItem('rpac_boot_cache')||'null'); }catch(e){}
 
   var cacheAge = cached ? (Date.now() - (cached.ts||0)) : Infinity;
+
+  // Validate cache — phải có soList và itemsByProcess, nếu không thì bỏ
+  function _isCacheValid(c){
+    return c && c.data
+      && Array.isArray(c.data.soList) && c.data.soList.length > 0
+      && c.data.itemsByProcess && Object.keys(c.data.itemsByProcess).length > 0
+      && Array.isArray(c.data.processes) && c.data.processes.length > 0;
+  }
+  if(cached && !_isCacheValid(cached)){
+    // Cache tồn tại nhưng thiếu data → xóa, load mới
+    try{ localStorage.removeItem('rpac_boot_cache'); }catch(e){}
+    cached = null;
+  }
+
   var hasFreshCache  = cached && cached.data && cacheAge < FRESH_TTL;
   var hasStaleCache  = cached && cached.data && cacheAge < STALE_TTL;
 
@@ -1396,7 +1410,6 @@ function bootApp(){
 // REFRESH DATA — QC bấm tự tải dữ liệu mới từ server
 // ══════════════════════════════════════════════════════════════
 function doRefreshData(){
-  // Thử gọi dù offline (fetch sẽ fail và báo lỗi rõ ràng)
   if(!navigator.onLine){
     showToast('📴 Không có mạng — không thể cập nhật','er',3000);
     return;
@@ -1406,28 +1419,27 @@ function doRefreshData(){
   if(btn) btn.style.opacity='0.5';
   if(txt) txt.textContent='Đang tải...';
 
+  // Xóa cache cũ trước khi fetch — đảm bảo luôn lấy data mới nhất
+  try{ localStorage.removeItem('rpac_boot_cache'); }catch(e){}
+
   gasGetAppData(
     function(data){
-      if(btn){btn.style.opacity='';} 
+      if(btn) btn.style.opacity='';
       if(txt) txt.textContent='Cập nhật';
       if(!data||!data.ok){
         showToast('⚠️ Không tải được dữ liệu: '+(data&&data.error||'lỗi'),'er',4000);
         return;
       }
-      // Cập nhật runtime
       S.boot=data; _soUppCache=null;
       _syncPARowsFromBoot();
       buildDropdowns();
       _buildMachineList(data.machineList||[]);
-      // Lưu cache mới
       try{
-        localStorage.setItem('rpac_boot_cache',
-          JSON.stringify({data:data, ts:Date.now()}));
+        localStorage.setItem('rpac_boot_cache', JSON.stringify({data:data, ts:Date.now()}));
       }catch(e){}
       var now=new Date();
       var timeStr=now.getHours()+':'+('0'+now.getMinutes()).slice(-2);
-      showToast('✅ Dữ liệu đã được cập nhật lúc '+timeStr,'ok',4000);
-      // Refresh history cache
+      showToast('✅ Dữ liệu đã cập nhật lúc '+timeStr,'ok',4000);
       _bgRefreshHistory();
     },
     function(err){
