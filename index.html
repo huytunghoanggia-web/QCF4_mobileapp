@@ -617,9 +617,6 @@ input[type=file]{display:none}
 .drawer-sub{font-size:11px;color:var(--txt3);margin-top:2px;font-weight:400}
 .drawer-cls{width:28px;height:28px;border-radius:50%;background:#f4f4f5;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;color:var(--txt2);border:none;font-weight:700;touch-action:manipulation}
 .drawer-body{padding:13px 16px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
-.drawer-footer{padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);flex-shrink:0;background:#fff}
-.btn-recheck{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 16px;border-radius:100px;border:none;cursor:pointer;font-family:var(--font);font-size:15px;font-weight:700;background:linear-gradient(135deg,#4630EB,#6C56F5);color:#fff;box-shadow:0 4px 14px rgba(70,48,235,.3);touch-action:manipulation;letter-spacing:-.2px}
-.btn-recheck:active{opacity:.85;transform:scale(.98)}
 .d-item{background:#f9f9fb;border-radius:9px;padding:9px 11px;margin-bottom:6px;display:flex;align-items:flex-start;gap:9px;border:1px solid var(--border)}
 .d-badge{flex-shrink:0;width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
 .d-badge.ok{background:#dcfce7;color:var(--ok)}
@@ -827,9 +824,6 @@ input[type=file]{display:none}
       <button class="drawer-cls" onclick="closeDr()">✕</button>
     </div>
     <div class="drawer-body" id="drBody"></div>
-    <div class="drawer-footer" id="drFooter" style="display:none">
-      <button class="btn-recheck" onclick="reCheckFromSession()">🔁 Kiểm tra lại đơn này</button>
-    </div>
   </div>
 </div>
 
@@ -2640,184 +2634,139 @@ function renderPagerClient(filteredTotal){var total=Math.ceil(filteredTotal/H.pa
 function updateHStat(data,f){var ngCnt=0;for(var i=0;i<data.length;i++){if(data[i].ng>0)ngCnt++;}var hasFilter=f.q||f.process||f.inspector;var total=H._filtered?H._filtered.length:H.all.length;document.getElementById('hStat').innerHTML='<span>'+(total?total+' phiên'+(hasFilter?' (đã lọc / '+H.all.length+' tổng)':''):'')+'</span>'+'<span>'+(data.length?(ngCnt>0?'<span style="color:var(--ng)">⚠️ '+ngCnt+' NG</span>':'<span style="color:var(--ok)">✅ Pass</span>'):'')+'</span>';}
 
 // DRAWER
-var _drCurrentSess = null; // session đang hiển thị trong drawer
+// ── DRAWER ───────────────────────────────────────────────────
+// _activeDrawerSess: session đang hiển thị, dùng closure để tránh race condition
+var _activeDrawerSess = null;
+
 function openDrawer(sess){
-  _drCurrentSess = sess;
-  // Nếu items chưa load (lazy) → load trước rồi mới render
-  if(sess._dataFileId && (!sess.items || sess.items.length === 0)){
-    document.getElementById('drawerBg').classList.add('on');
-    document.getElementById('drTitle').textContent = sess.so || '...';
-    document.getElementById('drSub').textContent = 'Đang tải chi tiết...';
-    document.getElementById('drBody').innerHTML = '<div style="padding:32px;text-align:center;color:var(--txt3)"><div class="h-spinner" style="margin:0 auto 12px"></div>Đang tải hạng mục...</div>';
-    document.getElementById('drFooter').style.display = 'none';
-    _gasCall('loadItems', {params:{fileId:sess._dataFileId,startRow:sess._startRow,endRow:sess._endRow}},
-      function(r){
-        if(r && r.ok && r.items) sess.items = r.items;
-        _renderDrawer(sess);
-      },
-      function(){ _renderDrawer(sess); }
-    );
+  _activeDrawerSess = sess;
+
+  // Nếu chưa load items (lazy) → show skeleton rồi fetch
+  if(sess._dataFileId && !sess._loaded){
+    // Capture sess tại thời điểm này bằng closure
+    (function(capturedSess){
+      document.getElementById('drawerBg').classList.add('on');
+      document.getElementById('drTitle').textContent = capturedSess.so || '...';
+      document.getElementById('drSub').textContent =
+        [capturedSess.localCustomer, capturedSess.process, capturedSess.inspector, capturedSess.date]
+        .filter(Boolean).join(' · ');
+      document.getElementById('drBody').innerHTML =
+        '<div style="padding:32px;text-align:center;color:var(--txt3)">' +
+        '<div class="h-spinner" style="margin:0 auto 12px"></div>Đang tải hạng mục...</div>';
+
+      _gasCall('loadItems',
+        {params:{fileId:capturedSess._dataFileId, startRow:capturedSess._startRow, endRow:capturedSess._endRow}},
+        function(r){
+          capturedSess._loaded = true;
+          capturedSess.items   = (r && r.ok && Array.isArray(r.items)) ? r.items : [];
+          // Chỉ render nếu user chưa mở session khác
+          if(_activeDrawerSess === capturedSess) _renderDrawer(capturedSess);
+        },
+        function(){
+          capturedSess._loaded = true;
+          capturedSess.items   = [];
+          if(_activeDrawerSess === capturedSess) _renderDrawer(capturedSess);
+        }
+      );
+    })(sess);
     return;
   }
   _renderDrawer(sess);
 }
+
 function _renderDrawer(sess){
-  var soLabel=(sess.soArr&&sess.soArr.length>1)?sess.soArr.join(', '):sess.so;
-  document.getElementById('drTitle').textContent=soLabel+(sess.itemCode?' - '+sess.itemCode:'');
-  document.getElementById('drSub').textContent=[sess.localCustomer,sess.process,sess.inspector,sess.date].filter(Boolean).join(' · ');
-  var infoHTML='';
-  if(sess.soArr&&sess.soArr.length>1){infoHTML+='<div style="background:#eef2ff;border-radius:8px;padding:8px 12px;margin-bottom:8px"><div style="font-size:10px;color:var(--ac);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:4px">Sales Orders ('+sess.soArr.length+')</div><div style="display:flex;flex-wrap:wrap;gap:4px">'+sess.soArr.map(function(s){return'<span style="font-family:var(--mono);font-size:12px;background:#fff;border:1px solid #c7d2fe;border-radius:5px;padding:2px 8px;color:var(--ac);font-weight:600">'+esc(s)+'</span>';}).join('')+'</div></div>';}
-  if(sess.itemCode||sess.localCustomer)infoHTML+='<div style="background:#f9f9fb;border-radius:8px;padding:9px 12px;margin-bottom:10px">'+(sess.itemCode?'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Item Code</div><div style="font-family:var(--mono);margin-bottom:'+(sess.localCustomer?6:0)+'px">'+esc(sess.itemCode)+'</div>':'')+(sess.localCustomer?'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Local Customer</div><div>'+esc(sess.localCustomer)+'</div>':'')+'</div>';
-  // Thời gian check
-  // Parse ngày từ sess - tránh lỗi "Sat Dec 30 1899"
-  var _drDate='';
-  if(sess.date && sess.date.indexOf('/')>=0 && sess.date.length<=10){
-    _drDate=sess.date;
-  } else if(sess.tsNum && sess.tsNum>0){
-    var _dd=new Date(sess.tsNum);
-    _drDate=('0'+_dd.getDate()).slice(-2)+'/'+('0'+(_dd.getMonth()+1)).slice(-2)+'/'+_dd.getFullYear();
+  var soLabel = (sess.soArr && sess.soArr.length > 1) ? sess.soArr.join(', ') : sess.so;
+  document.getElementById('drTitle').textContent = soLabel + (sess.itemCode ? ' - ' + sess.itemCode : '');
+  document.getElementById('drSub').textContent =
+    [sess.localCustomer, sess.process, sess.inspector, sess.date].filter(Boolean).join(' · ');
+
+  var infoHTML = '';
+  if(sess.soArr && sess.soArr.length > 1){
+    infoHTML += '<div style="background:#eef2ff;border-radius:8px;padding:8px 12px;margin-bottom:8px">' +
+      '<div style="font-size:10px;color:var(--ac);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:4px">Sales Orders ('+sess.soArr.length+')</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px">' +
+      sess.soArr.map(function(s){
+        return '<span style="font-family:var(--mono);font-size:12px;background:#fff;border:1px solid #c7d2fe;border-radius:5px;padding:2px 8px;color:var(--ac);font-weight:600">'+esc(s)+'</span>';
+      }).join('') + '</div></div>';
   }
-  // Giờ: lấy từ sess.time nếu hợp lệ (HH:mm:ss), fallback từ tsNum
-  var _drTime='';
+  if(sess.itemCode || sess.localCustomer){
+    infoHTML += '<div style="background:#f9f9fb;border-radius:8px;padding:9px 12px;margin-bottom:10px">' +
+      (sess.itemCode
+        ? '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Item Code</div>' +
+          '<div style="font-family:var(--mono);margin-bottom:'+(sess.localCustomer?6:0)+'px">'+esc(sess.itemCode)+'</div>' : '') +
+      (sess.localCustomer
+        ? '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Local Customer</div>' +
+          '<div>'+esc(sess.localCustomer)+'</div>' : '') +
+      '</div>';
+  }
+
+  // Parse timestamp
+  var _drDate = '';
+  if(sess.date && sess.date.indexOf('/') >= 0 && sess.date.length <= 10){
+    _drDate = sess.date;
+  } else if(sess.tsNum && sess.tsNum > 0){
+    var _dd = new Date(sess.tsNum);
+    _drDate = ('0'+_dd.getDate()).slice(-2)+'/'+('0'+(_dd.getMonth()+1)).slice(-2)+'/'+_dd.getFullYear();
+  }
+  var _drTime = '';
   if(sess.time && /^\d{2}:\d{2}/.test(sess.time)){
-    _drTime=sess.time.slice(0,5); // HH:mm
-  } else if(sess.tsNum && sess.tsNum>0){
-    var _dt=new Date(sess.tsNum);
-    _drTime=('0'+_dt.getHours()).slice(-2)+':'+('0'+_dt.getMinutes()).slice(-2);
+    _drTime = sess.time.slice(0,5);
+  } else if(sess.tsNum && sess.tsNum > 0){
+    var _dt = new Date(sess.tsNum);
+    _drTime = ('0'+_dt.getHours()).slice(-2)+':'+('0'+_dt.getMinutes()).slice(-2);
   }
-  var checkTime = (_drDate&&_drTime) ? _drDate+' '+_drTime : (_drDate||_drTime||'');
-  document.getElementById('drBody').innerHTML=
-    // Tóm tắt OK/NG/NA + thời gian
-    '<div class="sum-grid" style="margin-bottom:8px">'
-    +'<div class="sum-box ok"><div class="sum-n">'+sess.ok+'</div><div class="sum-lbl">OK</div></div>'
-    +'<div class="sum-box ng"><div class="sum-n">'+sess.ng+'</div><div class="sum-lbl">NG</div></div>'
-    +'<div class="sum-box na"><div class="sum-n">'+sess.na+'</div><div class="sum-lbl">N/A</div></div>'
-    +'</div>'
-    +(checkTime?'<div style="font-size:11px;color:var(--txt3);margin-bottom:8px;font-family:var(--mono)">🕐 '+esc(checkTime)+'</div>':'')
-    +infoHTML
-    +'<div class="sec" style="margin-bottom:6px">Chi tiết hạng mục ('+sess.items.length+')</div>'
-    // Bảng hạng mục
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
-    +'<thead><tr style="background:#f4f4f8">'
-    +'<th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">Hạng mục</th>'
-    +'<th style="padding:6px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);width:52px">KQ</th>'
-    +'<th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">Value / Ghi chú</th>'
-    +'</tr></thead><tbody>'
-    +(function(){var dphIdx=0;return sess.items.map(function(it){
-      var r=it.result||'';
-      var rc=r==='OK'?'ok':r==='NG'?'ng':r==='NA'?'na':r?'cx':'em';
-      var badgeStyle=rc==='ok'?'background:#dcfce7;color:var(--ok)':rc==='ng'?'background:#fee2e2;color:var(--ng)':rc==='na'?'background:#fef9c3;color:var(--na)':rc==='cx'?'background:#eff6ff;color:var(--ac)':'background:#f4f4f5;color:var(--txt3)';
-      var detail='';
-      if(it.value)detail+='<span style="color:var(--ac);font-family:var(--mono);font-size:11px">📏 '+esc(it.value)+'</span>';
-      if(it.note)detail+=(detail?'<br>':'')+'<span style="color:var(--txt2);font-size:11px">💬 '+esc(it.note)+'</span>';
-      var photoHtml='';
-      if(it.photo){var pidx='dph_'+(dphIdx++);photoHtml='<div class="d-photo" id="'+pidx+'" data-url="'+esc(it.photo)+'"><div class="d-photo-loading">⏳</div></div>';}
+  var checkTime = (_drDate && _drTime) ? _drDate+' '+_drTime : (_drDate || _drTime || '');
+
+  var items = sess.items || [];
+  var itemsHTML = '';
+  if(!items.length){
+    itemsHTML = '<div style="padding:16px;text-align:center;color:var(--txt3);font-size:13px">Không có dữ liệu hạng mục</div>';
+  } else {
+    var dphIdx = 0;
+    var rows = items.map(function(it){
+      var r  = it.result || '';
+      var rc = r==='OK'?'ok': r==='NG'?'ng': r==='NA'?'na': r?'cx':'em';
+      var badgeStyle = rc==='ok'  ? 'background:#dcfce7;color:var(--ok)'
+                     : rc==='ng'  ? 'background:#fee2e2;color:var(--ng)'
+                     : rc==='na'  ? 'background:#fef9c3;color:var(--na)'
+                     : rc==='cx'  ? 'background:#eff6ff;color:var(--ac)'
+                     :              'background:#f4f4f5;color:var(--txt3)';
+      var detail = '';
+      if(it.value) detail += '<span style="color:var(--ac);font-family:var(--mono);font-size:11px">📏 '+esc(it.value)+'</span>';
+      if(it.note)  detail += (detail?'<br>':'')+'<span style="color:var(--txt2);font-size:11px">💬 '+esc(it.note)+'</span>';
+      var photoHtml = '';
+      if(it.photo){
+        var pidx = 'dph_'+(dphIdx++);
+        photoHtml = '<div class="d-photo" id="'+pidx+'" data-url="'+esc(it.photo)+'"><div class="d-photo-loading">⏳</div></div>';
+      }
       return '<tr style="border-bottom:1px solid var(--border)">'
         +'<td style="padding:7px 8px;font-size:12px;color:var(--txt)">'+esc(it.itemcheck)+'</td>'
         +'<td style="padding:7px 8px;text-align:center"><span style="display:inline-block;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:800;'+badgeStyle+'">'+esc(r||'—')+'</span></td>'
         +'<td style="padding:7px 8px">'+(detail||'<span style="color:var(--txt3);font-size:11px">—</span>')+photoHtml+'</td>'
         +'</tr>';
-    }).join('');})()
-    +'</tbody></table>';
-  document.getElementById('drawerBg').classList.add('on');
-  // Hiện nút "Kiểm tra lại" (chỉ khi có dữ liệu boot đầy đủ)
-  var footer = document.getElementById('drFooter');
-  if(footer){
-    var canRecheck = S.boot && sess.process && sess.soArr && sess.soArr.length > 0;
-    footer.style.display = canRecheck ? '' : 'none';
+    });
+    itemsHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<thead><tr style="background:#f4f4f8">'
+      +'<th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">Hạng mục</th>'
+      +'<th style="padding:6px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);width:52px">KQ</th>'
+      +'<th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">Value / Ghi chú</th>'
+      +'</tr></thead><tbody>'+rows.join('')+'</tbody></table>';
   }
-  _drawerSess = sess; // lưu lại để reCheckFromSession() dùng
-  setTimeout(_loadDrawerPhotos,100);
+
+  document.getElementById('drBody').innerHTML =
+    '<div class="sum-grid" style="margin-bottom:8px">'
+    +'<div class="sum-box ok"><div class="sum-n">'+sess.ok+'</div><div class="sum-lbl">OK</div></div>'
+    +'<div class="sum-box ng"><div class="sum-n">'+sess.ng+'</div><div class="sum-lbl">NG</div></div>'
+    +'<div class="sum-box na"><div class="sum-n">'+sess.na+'</div><div class="sum-lbl">N/A</div></div>'
+    +'</div>'
+    +(checkTime ? '<div style="font-size:11px;color:var(--txt3);margin-bottom:8px;font-family:var(--mono)">🕐 '+esc(checkTime)+'</div>' : '')
+    +infoHTML
+    +'<div class="sec" style="margin-bottom:6px">Chi tiết hạng mục ('+items.length+')</div>'
+    +itemsHTML;
+
+  document.getElementById('drawerBg').classList.add('on');
+  setTimeout(_loadDrawerPhotos, 100);
 }
-var _drawerSess = null;
-function closeDr(){
-  document.getElementById('drawerBg').classList.remove('on');
-}
-
-// ══════════════════════════════════════════════════════════════
-// RECHECK — Điền lại header từ session cũ, vào Screen B ngay
-// ══════════════════════════════════════════════════════════════
-function reCheckFromSession(){
-  var sess = _drawerSess;
-  if(!sess){ showToast('⚠️ Không có dữ liệu phiên','er'); return; }
-  if(!S.boot || !S.boot.itemsByProcess){ showToast('⚠️ Dữ liệu chưa tải xong','er'); return; }
-  var proc = sess.process || '';
-  var masterItems = S.boot.itemsByProcess[proc] || [];
-  if(!masterItems.length){ showToast('⚠️ Công đoạn "'+proc+'" chưa có hạng mục','er'); return; }
-
-  closeDr();
-  gotoTab('Check');
-
-  // Reset form sạch trước
-  resetForm();
-
-  // ── Fill SO ──────────────────────────────────────────────
-  var soMap = getSOMap();
-  S.selectedSOs = (sess.soArr && sess.soArr.length) ? sess.soArr.slice() : (sess.so ? [sess.so] : []);
-  S.soMeta = {};
-  S.selectedSOs.forEach(function(so){
-    var d = soMap[so] || {};
-    if(!d.itemCode && !d.localCustomer){
-      // SO không có trong master → dùng meta từ session
-      S.soMeta[so] = {
-        itemCode: sess.itemCode || '',
-        localCustomer: sess.localCustomer || '',
-        manual: true
-      };
-    }
-  });
-  renderSOChips();
-  renderSOInfo();
-
-  // ── Fill Process ─────────────────────────────────────────
-  S.process = proc;
-  var procSel = document.getElementById('procSelect');
-  if(procSel) procSel.value = proc;
-  onProcChange(proc); // hiện các ô Machine/Lot/AQL tương ứng
-
-  // ── Fill Machine ─────────────────────────────────────────
-  S.machine = sess.machine || '';
-  var machInp = document.getElementById('machineInp');
-  if(machInp) machInp.value = S.machine;
-
-  // ── Fill Operator ID ─────────────────────────────────────
-  S.operatorId = sess.operatorId || sess.inspector || '';
-  var opInp = document.getElementById('operatorIdInp');
-  if(opInp) opInp.value = S.operatorId;
-
-  // ── Fill Lot / AQL ───────────────────────────────────────
-  S.lotQty    = sess.lotQty    || '';
-  S.aqlQty    = sess.aqlQty    || '';
-  S.aqlAccept = sess.aqlAccept || '';
-  var lqInp = document.getElementById('lotQtyInp');   if(lqInp) lqInp.value = S.lotQty;
-  var aqInp = document.getElementById('aqlQtyInp');   if(aqInp) aqInp.value = S.aqlQty;
-  var aaInp = document.getElementById('aqlAcceptInp');if(aaInp) aaInp.value = S.aqlAccept;
-
-  // ── Build items (fresh — không copy kết quả cũ) ─────────
-  S.items = masterItems.map(function(it){
-    var lower = it.itemcheck.toLowerCase();
-    var isDelta  = lower.indexOf('delta_e') >= 0 || lower.indexOf('delta e') >= 0;
-    var isRemark = lower.indexOf('remark_order') >= 0;
-    var isDim    = !isDelta && !isRemark && (lower.indexOf('dimension') >= 0 || lower.indexOf('dimen') >= 0);
-    return {
-      itemId: it.itemId, itemcheck: it.itemcheck, standard: it.standard || '',
-      result: '', value: '', note: '', photoBase64: '', photoName: '',
-      isDelta: isDelta, isRemark: isRemark, isDim: isDim,
-      dRows: isDelta ? [{lbl:'Màu 1',result:'',value:'',note:''},{lbl:'Màu 2',result:'',value:'',note:''}] : null,
-      dimRows: isDim ? [{lbl:'L',result:'',value:'',note:''},{lbl:'W',result:'',value:'',note:''},{lbl:'H',result:'',value:'',note:''}] : null
-    };
-  });
-
-  // ── Vào Screen B ngay ────────────────────────────────────
-  document.getElementById('alertDup').classList.remove('on');
-  document.getElementById('bSO').textContent = S.selectedSOs.length > 1 ? S.selectedSOs.length + ' SOs' : S.selectedSOs[0];
-  document.getElementById('bProc').textContent = proc;
-  _pbFillEl = null; _bPgEl = null; _spbCount = null; _spbEl = null; _spbSO = null; _spbSegs = null;
-  renderItems();
-  showScreen('B');
-  showToast('✅ Đã điền lại thông tin — '+S.selectedSOs[0]+' · '+proc, 'ok', 3500);
-}
-
 
 // UI HELPERS
 function showOverlay(t,s){document.getElementById('ovTitle').textContent=t;document.getElementById('ovSub').textContent=s||'';document.getElementById('overlay').classList.add('on');}
