@@ -1116,7 +1116,7 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwhPpf336HebgBaFNHF4hrVZGwHp_102w8UAuDV-Wyo2JGRIFfJTOQ4H_pc0resiU49rQ/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbzYGU6HRLlBUlAqTgAFbrc0ma_D98eDz5Nafe6HxweEKKtAISMtV0P4EHqYJmz5txB7cQ/exec';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -2782,6 +2782,27 @@ function _renderDrawer(sess){
 
   document.getElementById('drawerBg').classList.add('on');
   setTimeout(_loadDrawerPhotos, 100);
+}
+
+function closeDr(){
+  document.getElementById('drawerBg').classList.remove('on');
+  _activeDrawerSess = null;
+}
+function _loadDrawerPhotos(){
+  var els=document.querySelectorAll('#drBody .d-photo[data-url]');
+  els.forEach(function(el){
+    var url=el.getAttribute('data-url');
+    if(!url)return;
+    if(url.indexOf('data:image')===0){_renderPhoto(el,url);return;}
+    _gasCall('getPhotoAsBase64',{driveUrl:url},
+      function(r){if(r&&r.ok)_renderPhoto(el,r.dataUrl);else el.innerHTML='<div class="d-photo-err">❌ Không tải được ảnh</div>';},
+      function(){el.innerHTML='<div class="d-photo-err">❌ Lỗi kết nối</div>';}
+    );
+  });
+}
+function _renderPhoto(el,dataUrl){
+  var viewUrl=driveViewUrl(el.getAttribute('data-url'));
+  el.innerHTML='<a href="'+viewUrl+'" target="_blank"><img src="'+dataUrl+'" alt="Ảnh kiểm tra"></a>';
 }
 
 // UI HELPERS
