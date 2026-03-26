@@ -1116,7 +1116,7 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbzYGU6HRLlBUlAqTgAFbrc0ma_D98eDz5Nafe6HxweEKKtAISMtV0P4EHqYJmz5txB7cQ/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwhPpf336HebgBaFNHF4hrVZGwHp_102w8UAuDV-Wyo2JGRIFfJTOQ4H_pc0resiU49rQ/exec';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -2220,7 +2220,10 @@ function uniq(a){return a.filter(function(v,i,ar){return ar.indexOf(v)===i;});}
 // ══════════════════════════════════════════════════════════════
 // SAVE
 // ══════════════════════════════════════════════════════════════
+var _isSaving = false; // guard chống double-tap nút Lưu
 function doSave(){
+  if(_isSaving){ showToast('⏳ Đang lưu, vui lòng chờ...','',1500); return; }
+  _isSaving = true;
   var empty=0;
   S.items.forEach(function(it){
     if(it.isRemark)return;
@@ -2267,6 +2270,7 @@ function doSave(){
   // Push 1 payload duy nhất — KHÔNG push array lớn
   S.queue.push(payloads[0]); saveQueue();
   _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length);
+  _isSaving = false; // reset guard sau khi đã push vào queue thành công
   showDone(nSaved,!S.online);
   if(S.online)_bgSyncQueue();
   var paRows=[];
@@ -2287,8 +2291,11 @@ function _bgSyncQueue(){
   // Gửi TỪNG payload một, không batch — tránh GAS gộp nhiều phiên thành 1 record
   if(!S.online||!S.queue.length)return;
   if(_syncInProgress)return; // chống double-fire
+  // Lọc bỏ payload đã được đánh dấu _synced (tránh gửi lại khi mạng chập chờn)
+  var pending = S.queue.filter(function(p){ return !p._synced; });
+  if(!pending.length){ S.queue=[]; saveQueue(); return; }
   _syncInProgress=true;
-  _syncOneByOne(S.queue.slice(), 0, 0, function(totalSaved){
+  _syncOneByOne(pending.slice(), 0, 0, function(totalSaved){
     _syncInProgress=false;
     if(totalSaved>0){
       showToast('✅ Đã lưu '+totalSaved+' dòng vào Sheet','ok',2500);
@@ -2303,6 +2310,8 @@ function _syncOneByOne(queue, idx, savedCount, done){
   gasSaveResults([payload],
     function(r){
       if(r&&r.ok){
+        // Đánh dấu payload đã sync — ngăn gửi lại nếu còn trong queue
+        payload._synced = true;
         // Xóa payload đã sync khỏi queue thực
         var qi=S.queue.indexOf(payload);
         if(qi>=0){
