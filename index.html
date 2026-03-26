@@ -1609,18 +1609,30 @@ function updateQueueUI(){
   if(oc)oc.textContent=n>0?(n+' phiên chờ sync'):'';
   var b=document.getElementById('nbBadge');b.style.display=n>0?'block':'none';b.textContent=n;
 }
-function tryAutoSync(){if(S.online&&S.queue.length>0)_bgSyncQueue();}
+function tryAutoSync(){
+  if(S.online && S.queue.length > 0){
+    clearTimeout(_syncRetryTimer);
+    // Delay nhỏ để kết nối ổn định trước khi sync
+    setTimeout(_bgSyncQueue, 1000);
+  }
+}
 function doSync(){
   if(!S.online||!S.queue.length)return;
   if(_syncInProgress){showToast('⏳ Đang sync...','',2000);return;}
-  var total=S.queue.length;
+  var pending = S.queue.filter(function(p){ return !p._synced; });
+  if(!pending.length){ S.queue=[]; saveQueue(); return; }
+  var total = pending.length;
   showOverlay('Đang đồng bộ '+total+' phiên...','Gửi từng phiên riêng lẻ...');
-  _syncInProgress=true;
-  _syncOneByOne(S.queue.slice(), 0, 0, function(savedCount){
-    _syncInProgress=false;
+  _syncInProgress = true;
+  clearTimeout(_syncRetryTimer);
+  _syncOneByOne(pending, 0, 0, function(savedCount, failCount){
+    _syncInProgress = false;
     hideOverlay();
-    H.lastQ='';
-    showToast('✅ Đồng bộ '+savedCount+' dòng ('+total+' phiên)','ok',3000);
+    if(failCount > 0){
+      showToast('✅ '+savedCount+' dòng đã lưu · ⚠️ '+failCount+' phiên lỗi, thử lại sau','',4000);
+    } else {
+      showToast('✅ Đồng bộ '+savedCount+' dòng ('+total+' phiên)','ok',3000);
+    }
     _bgRefreshHistory();
   });
 }
@@ -2287,49 +2299,70 @@ function doSave(){
   if(paRows.length)_gasCall('savePayAttention',{rows:paRows},null,function(){});
 }
 
+var _syncInProgress = false;
+var _syncRetryTimer = null;
+var _SYNC_RETRY_MS  = 30000; // retry sau 30s nếu còn queue
+
 function _bgSyncQueue(){
-  // Gửi TỪNG payload một, không batch — tránh GAS gộp nhiều phiên thành 1 record
-  if(!S.online||!S.queue.length)return;
-  if(_syncInProgress)return; // chống double-fire
-  // Lọc bỏ payload đã được đánh dấu _synced (tránh gửi lại khi mạng chập chờn)
+  if(!S.online || !S.queue.length) return;
+  if(_syncInProgress) return;
+  // Lọc payload chưa sync
   var pending = S.queue.filter(function(p){ return !p._synced; });
   if(!pending.length){ S.queue=[]; saveQueue(); return; }
-  _syncInProgress=true;
-  _syncOneByOne(pending.slice(), 0, 0, function(totalSaved){
-    _syncInProgress=false;
-    if(totalSaved>0){
-      showToast('✅ Đã lưu '+totalSaved+' dòng vào Sheet','ok',2500);
+  _syncInProgress = true;
+  clearTimeout(_syncRetryTimer);
+  _syncOneByOne(pending, 0, 0, function(savedCount, failCount){
+    _syncInProgress = false;
+    if(savedCount > 0){
+      showToast('✅ Đã lưu '+savedCount+' dòng vào Sheet','ok',2500);
       _bgRefreshHistory();
+    }
+    // Nếu còn payload lỗi → schedule retry tự động
+    var stillPending = S.queue.filter(function(p){ return !p._synced; });
+    if(stillPending.length > 0 && S.online){
+      _syncRetryTimer = setTimeout(function(){
+        if(S.online && S.queue.length > 0) _bgSyncQueue();
+      }, _SYNC_RETRY_MS);
     }
   });
 }
-var _syncInProgress=false;
+
 function _syncOneByOne(queue, idx, savedCount, done){
-  if(idx>=queue.length){ done(savedCount); return; }
-  var payload=queue[idx];
+  if(idx >= queue.length){ done(savedCount, 0); return; }
+  var payload = queue[idx];
+  // Skip payload đã sync rồi (double-check)
+  if(payload._synced){
+    _syncOneByOne(queue, idx+1, savedCount, done);
+    return;
+  }
   gasSaveResults([payload],
     function(r){
-      if(r&&r.ok){
-        // Đánh dấu payload đã sync — ngăn gửi lại nếu còn trong queue
+      if(r && r.ok){
         payload._synced = true;
-        // Xóa payload đã sync khỏi queue thực
-        var qi=S.queue.indexOf(payload);
-        if(qi>=0){
-          if(payload.results)payload.results.forEach(function(it){it.photoBase64='';});
-          S.queue.splice(qi,1);
+        var qi = S.queue.indexOf(payload);
+        if(qi >= 0){
+          if(payload.results) payload.results.forEach(function(it){ it.photoBase64=''; });
+          S.queue.splice(qi, 1);
           saveQueue();
         }
-        _syncOneByOne(queue, idx+1, savedCount+(r.saved||0), done);
+        // Tiếp tục payload kế tiếp dù thành công hay thất bại
+        _syncOneByOne(queue, idx+1, savedCount + (r.saved||0), done);
       } else {
-        // Lỗi 1 payload → dừng, giữ lại trong queue, thử lại sau
-        _syncInProgress=false;
-        console.warn('[Sync] payload',idx,'failed:',r&&r.error);
-        if(savedCount>0) showToast('✅ Đã lưu '+savedCount+' dòng, còn '+(queue.length-idx)+' chờ sync','ok',3000);
+        // GAS trả lỗi (vd: dedup, server busy) → log + BỎ QUA, tiếp tục payload kế tiếp
+        console.warn('[Sync] payload', idx, 'server error:', r&&r.error);
+        if(r && r.error && r.error.indexOf('bận') >= 0){
+          // Server busy → dừng, retry sau
+          done(savedCount, queue.length - idx);
+        } else {
+          // Lỗi khác (dedup, invalid...) → skip payload này, tiếp tục
+          _syncOneByOne(queue, idx+1, savedCount, done);
+        }
       }
     },
-    function(){
-      _syncInProgress=false;
-      console.warn('[Sync] network error at payload',idx);
+    function(err){
+      // Network error → dừng chuỗi, retry sau
+      console.warn('[Sync] network error at payload', idx, err&&err.message);
+      done(savedCount, queue.length - idx);
     }
   );
 }
