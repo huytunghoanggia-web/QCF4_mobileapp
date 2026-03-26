@@ -38,7 +38,7 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
   position:fixed;inset:0;z-index:900;
   background:linear-gradient(160deg,#1a0f6b 0%,#4630EB 55%,#6C56F5 100%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:24px;
+  padding:calc(env(safe-area-inset-top,0px) + 24px) 24px calc(env(safe-area-inset-bottom,0px) + 24px);
 }
 #pgLogin.hidden{display:none}
 
@@ -135,7 +135,11 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
 #appShell.on{display:flex}
 
 /* TOPBAR */
-.tb{background:#4630EB;height:56px;display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(70,48,235,.25)}
+.tb{background:#4630EB;display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(70,48,235,.25);
+  /* iPhone safe area — tránh bị che bởi notch / Dynamic Island */
+  padding-top:env(safe-area-inset-top,0px);
+  min-height:calc(56px + env(safe-area-inset-top,0px));
+}
 .logo{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-.5px}
 .tb-name{font-size:16px;font-weight:800;color:#fff;letter-spacing:-.4px}
 .tb-ver{font-size:9px;color:rgba(255,255,255,.55);font-family:var(--mono)}
@@ -723,7 +727,7 @@ input[type=file]{display:none}
   <div><div class="tb-name">Rpac_Tung_QC_checksheet</div><div class="tb-ver">v4.9</div></div>
   <div class="tb-right">
     <div class="chip chip-off" id="chipOff"><div class="dot-off"></div>Offline</div>
-    <div class="chip chip-sync" id="chipSync" onclick="doSync()">↑ Sync (<span id="syncN">0</span>)</div>
+    <div class="chip chip-sync" id="chipSync" onclick="doSync()" style="display:none!important">↑ Sync (<span id="syncN">0</span>)</div>
     <div class="chip" id="chipRefresh" onclick="doRefreshData()" title="Tải dữ liệu mới từ server"
          style="display:flex;background:#eff6ff;border:1px solid #bfdbfe;color:#3730a3;cursor:pointer">
       🔄 <span id="refreshTxt">Cập nhật</span>
@@ -758,7 +762,13 @@ input[type=file]{display:none}
 <!-- QUEUE BAR -->
 <div class="qbar" id="qbar">
   <span>⚡ <span id="qbarN">0</span> phiên chờ sync</span>
-  <span style="font-size:10px;opacity:.6">Tự sync khi có mạng</span>
+  <button onclick="doSync()" id="qbarSyncBtn"
+    style="background:#f59e0b;border:none;border-radius:20px;padding:5px 14px;
+           font-size:12px;font-weight:700;color:#fff;cursor:pointer;
+           touch-action:manipulation;font-family:var(--font);
+           box-shadow:0 2px 6px rgba(0,0,0,.15)">
+    ↑ Đồng bộ ngay
+  </button>
 </div>
 
 <!-- OVERLAY -->
@@ -1116,7 +1126,7 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwhPpf336HebgBaFNHF4hrVZGwHp_102w8UAuDV-Wyo2JGRIFfJTOQ4H_pc0resiU49rQ/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbzYGU6HRLlBUlAqTgAFbrc0ma_D98eDz5Nafe6HxweEKKtAISMtV0P4EHqYJmz5txB7cQ/exec';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -1604,7 +1614,14 @@ function updateQueueUI(){
   document.getElementById('syncN').textContent=n;
   document.getElementById('qbarN').textContent=n;
   document.getElementById('qbar').classList.toggle('on',n>0);
-  document.getElementById('chipSync').classList.toggle('on',n>0&&S.online);
+  // Nút Sync trong qbar: luôn hiện khi có queue
+  var qbtn=document.getElementById('qbarSyncBtn');
+  if(qbtn){
+    qbtn.style.display = n>0 ? '' : 'none';
+    qbtn.textContent   = S.online ? '↑ Đồng bộ ngay' : '📴 Đang offline';
+    qbtn.style.background = S.online ? '#f59e0b' : '#9ca3af';
+    qbtn.disabled = !S.online;
+  }
   var oc=document.getElementById('offlineQueueCount');
   if(oc)oc.textContent=n>0?(n+' phiên chờ sync'):'';
   var b=document.getElementById('nbBadge');b.style.display=n>0?'block':'none';b.textContent=n;
