@@ -38,7 +38,7 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
   position:fixed;inset:0;z-index:900;
   background:linear-gradient(160deg,#1a0f6b 0%,#4630EB 55%,#6C56F5 100%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:calc(env(safe-area-inset-top,0px) + 24px) 24px calc(env(safe-area-inset-bottom,0px) + 24px);
+  padding:24px;
 }
 #pgLogin.hidden{display:none}
 
@@ -135,11 +135,7 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
 #appShell.on{display:flex}
 
 /* TOPBAR */
-.tb{background:#4630EB;display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(70,48,235,.25);
-  /* iPhone safe area — tránh bị che bởi notch / Dynamic Island */
-  padding-top:env(safe-area-inset-top,0px);
-  min-height:calc(56px + env(safe-area-inset-top,0px));
-}
+.tb{background:#4630EB;height:56px;display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(70,48,235,.25)}
 .logo{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-.5px}
 .tb-name{font-size:16px;font-weight:800;color:#fff;letter-spacing:-.4px}
 .tb-ver{font-size:9px;color:rgba(255,255,255,.55);font-family:var(--mono)}
@@ -727,7 +723,7 @@ input[type=file]{display:none}
   <div><div class="tb-name">Rpac_Tung_QC_checksheet</div><div class="tb-ver">v4.9</div></div>
   <div class="tb-right">
     <div class="chip chip-off" id="chipOff"><div class="dot-off"></div>Offline</div>
-    <div class="chip chip-sync" id="chipSync" onclick="doSync()" style="display:none!important">↑ Sync (<span id="syncN">0</span>)</div>
+    <div class="chip chip-sync" id="chipSync" onclick="doSync()">↑ Sync (<span id="syncN">0</span>)</div>
     <div class="chip" id="chipRefresh" onclick="doRefreshData()" title="Tải dữ liệu mới từ server"
          style="display:flex;background:#eff6ff;border:1px solid #bfdbfe;color:#3730a3;cursor:pointer">
       🔄 <span id="refreshTxt">Cập nhật</span>
@@ -762,13 +758,7 @@ input[type=file]{display:none}
 <!-- QUEUE BAR -->
 <div class="qbar" id="qbar">
   <span>⚡ <span id="qbarN">0</span> phiên chờ sync</span>
-  <button onclick="doSync()" id="qbarSyncBtn"
-    style="background:#f59e0b;border:none;border-radius:20px;padding:5px 14px;
-           font-size:12px;font-weight:700;color:#fff;cursor:pointer;
-           touch-action:manipulation;font-family:var(--font);
-           box-shadow:0 2px 6px rgba(0,0,0,.15)">
-    ↑ Đồng bộ ngay
-  </button>
+  <span style="font-size:10px;opacity:.6">Tự sync khi có mạng</span>
 </div>
 
 <!-- OVERLAY -->
@@ -1126,7 +1116,7 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbwhPpf336HebgBaFNHF4hrVZGwHp_102w8UAuDV-Wyo2JGRIFfJTOQ4H_pc0resiU49rQ/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbzYGU6HRLlBUlAqTgAFbrc0ma_D98eDz5Nafe6HxweEKKtAISMtV0P4EHqYJmz5txB7cQ/exec';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -1149,24 +1139,12 @@ function _gasCall(action, body, ok, err) {
   var payload = Object.assign({action: action}, body||{});
   fetch(GAS_URL, {
     method: 'POST',
-    headers: {'Content-Type':'text/plain'},
+    headers: {'Content-Type':'text/plain'},  // GAS yêu cầu text/plain để tránh preflight CORS
     body: JSON.stringify(payload)
   })
-  .then(function(r){
-    if(!r.ok) throw new Error('HTTP '+r.status+' '+r.statusText);
-    return r.json();
-  })
-  .then(function(data){
-    if(data && data.ok === false && data.error){
-      console.error('[GAS]['+action+'] error:', data.error);
-    }
-    if(ok) ok(data);
-  })
-  .catch(function(e){
-    console.error('[GAS]['+action+'] failed:', e.message||e);
-    if(err) err(e);
-    else showToast('❌ ['+action+'] '+( e.message||'Lỗi kết nối'),'er',5000);
-  });
+  .then(function(r){ return r.json(); })
+  .then(function(data){ if(ok) ok(data); })
+  .catch(function(e){ if(err) err(e); else console.error('GAS call error:',e); });
 }
 
 function gasDoLogin(pwd,ok,err)  { _gasCall('login',{password:pwd},ok,err); }
@@ -1332,100 +1310,54 @@ function _showLoginWithMsg(msg){
 }
 
 function bootApp(){
-  // ── Stale-While-Revalidate boot ────────────────────────────
-  // Mục tiêu: hiện app ngay từ cache, fetch mới ngầm trong nền
-  // Chỉ block UI (overlay) khi thực sự không có cache nào
-  var FRESH_TTL  = 4  * 60 * 60 * 1000; // < 4h  → dùng cache, fetch ngầm yên lặng
-  var STALE_TTL  = 7  * 24 * 60 * 60 * 1000; // < 7 ngày → dùng cache, fetch ngầm + toast
-  var cached = null;
-  try{ cached = JSON.parse(localStorage.getItem('rpac_boot_cache')||'null'); }catch(e){}
-
-  var cacheAge = cached ? (Date.now() - (cached.ts||0)) : Infinity;
-
-  // Validate cache — phải có soList và itemsByProcess, nếu không thì bỏ
-  function _isCacheValid(c){
-    return c && c.data
-      && Array.isArray(c.data.soList) && c.data.soList.length > 0
-      && c.data.itemsByProcess && Object.keys(c.data.itemsByProcess).length > 0
-      && Array.isArray(c.data.processes) && c.data.processes.length > 0;
-  }
-  if(cached && !_isCacheValid(cached)){
-    // Cache tồn tại nhưng thiếu data → xóa, load mới
-    try{ localStorage.removeItem('rpac_boot_cache'); }catch(e){}
-    cached = null;
-  }
-
-  var hasFreshCache  = cached && cached.data && cacheAge < FRESH_TTL;
-  var hasStaleCache  = cached && cached.data && cacheAge < STALE_TTL;
-
-  // ── Hàm apply data vào app (dùng chung cho cache và network) ──
-  function _applyBootData(data, fromCache){
-    S.boot = data;
-    _soUppCache = null;
-    _syncPARowsFromBoot();
-    buildDropdowns();
-    _buildMachineList(data.machineList||[]);
-    if(!fromCache) startPAPolling();
-    try{
-      localStorage.setItem('rpac_boot_cache', JSON.stringify({data:data, ts:Date.now()}));
-    }catch(e){}
-  }
-
-  // ── Hàm fetch từ GAS ──
-  function _fetchFromGAS(isBgRefresh){
-    gasGetAppData(
-      function(data){
-        if(!isBgRefresh) hideOverlay();
-        if(!data){ if(!isBgRefresh) showErrBox('Không nhận được dữ liệu từ server.'); return; }
-        if(data.error){ if(!isBgRefresh) showErrBox(data.error); return; }
-        if(data.ok){
-          _applyBootData(data, false);
-          if(isBgRefresh){
-            // Cập nhật ngầm thành công — chỉ toast nhẹ nếu cache đã cũ
-            if(!hasFreshCache){
-              var now=new Date();
-              showToast('✅ Dữ liệu đã cập nhật lúc '+now.getHours()+':'+('0'+now.getMinutes()).slice(-2),'ok',3000);
-            }
-          }
-        }
-      },
-      function(err){
-        if(!isBgRefresh){
-          hideOverlay();
-          // Không có cache nào → báo lỗi
-          showErrBox((err&&err.message)?err.message:String(err||'Lỗi không xác định'));
-        }
-        // Nếu là bg refresh lỗi → im lặng, dữ liệu cache vẫn đang dùng
+  showOverlay('Đang tải dữ liệu...','Kết nối Google Sheet...');
+  gasGetAppData(
+    function(data){
+      hideOverlay();
+      if(!data){ showErrBox('Không nhận được dữ liệu từ server.'); return; }
+      if(data.error) showErrBox(data.error);
+      if(data.ok){
+        S.boot = data;
+        _soUppCache = null;
+        _syncPARowsFromBoot();
+        buildDropdowns();
+        _buildMachineList(data.machineList||[]);
+        startPAPolling();
+        // ── PWA: cache boot data để dùng offline ──
+        try{
+          var cachePayload={data:data,ts:Date.now()};
+          localStorage.setItem('rpac_boot_cache', JSON.stringify(cachePayload));
+        }catch(e){}
       }
-    );
-  }
-
-  if(hasFreshCache){
-    // Cache còn fresh (< 4h) → vào app ngay lập tức, fetch ngầm yên lặng
-    _applyBootData(cached.data, true);
-    startPAPollingImmediate(); // poll ngay để lấy PA mới nhất, không chờ 10s
-    if(S.online) setTimeout(function(){ _fetchFromGAS(true); }, 1500);
-
-  } else if(hasStaleCache){
-    // Cache hơi cũ (4h–7 ngày) → vào app ngay, fetch ngầm + thông báo nhẹ
-    _applyBootData(cached.data, true);
-    startPAPollingImmediate(); // poll ngay để lấy PA mới nhất
-    var ageH = Math.round(cacheAge/3600000);
-    var ageStr = ageH < 1 ? 'vừa xong' : ageH + 'h trước';
-    showToast('⏳ Dữ liệu cache ('+ ageStr +') — đang cập nhật...', '', 4000);
-    if(S.online) setTimeout(function(){ _fetchFromGAS(true); }, 800);
-
-  } else {
-    // Không có cache → flow cũ: overlay + chờ GAS
-    showOverlay('Đang tải dữ liệu...','Kết nối Google Sheet...');
-    _fetchFromGAS(false);
-  }
+    },
+    function(err){
+      hideOverlay();
+      // ── PWA: thử restore từ cache offline ──
+      try{
+        var cached=JSON.parse(localStorage.getItem('rpac_boot_cache')||'null');
+        var MAX_CACHE_AGE=7*24*60*60*1000; // 7 ngày
+        if(cached && cached.data && (Date.now()-cached.ts)<MAX_CACHE_AGE){
+          S.boot=cached.data;
+          _soUppCache=null;
+          _syncPARowsFromBoot();
+          buildDropdowns();
+          _buildMachineList(cached.data.machineList||[]);
+          var cachedAge=Math.round((Date.now()-cached.ts)/3600000);
+          var ageStr=cachedAge<1?'vừa xong':cachedAge+'h trước';
+          showToast('📴 Offline — dữ liệu cache ('+ageStr+')','',5000);
+          return;
+        }
+      }catch(e){}
+      showErrBox((err&&err.message)?err.message:String(err||'Lỗi không xác định'));
+    }
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
 // REFRESH DATA — QC bấm tự tải dữ liệu mới từ server
 // ══════════════════════════════════════════════════════════════
 function doRefreshData(){
+  // Thử gọi dù offline (fetch sẽ fail và báo lỗi rõ ràng)
   if(!navigator.onLine){
     showToast('📴 Không có mạng — không thể cập nhật','er',3000);
     return;
@@ -1435,27 +1367,28 @@ function doRefreshData(){
   if(btn) btn.style.opacity='0.5';
   if(txt) txt.textContent='Đang tải...';
 
-  // Xóa cache cũ trước khi fetch — đảm bảo luôn lấy data mới nhất
-  try{ localStorage.removeItem('rpac_boot_cache'); }catch(e){}
-
   gasGetAppData(
     function(data){
-      if(btn) btn.style.opacity='';
+      if(btn){btn.style.opacity='';} 
       if(txt) txt.textContent='Cập nhật';
       if(!data||!data.ok){
         showToast('⚠️ Không tải được dữ liệu: '+(data&&data.error||'lỗi'),'er',4000);
         return;
       }
+      // Cập nhật runtime
       S.boot=data; _soUppCache=null;
       _syncPARowsFromBoot();
       buildDropdowns();
       _buildMachineList(data.machineList||[]);
+      // Lưu cache mới
       try{
-        localStorage.setItem('rpac_boot_cache', JSON.stringify({data:data, ts:Date.now()}));
+        localStorage.setItem('rpac_boot_cache',
+          JSON.stringify({data:data, ts:Date.now()}));
       }catch(e){}
       var now=new Date();
       var timeStr=now.getHours()+':'+('0'+now.getMinutes()).slice(-2);
-      showToast('✅ Dữ liệu đã cập nhật lúc '+timeStr,'ok',4000);
+      showToast('✅ Dữ liệu đã được cập nhật lúc '+timeStr,'ok',4000);
+      // Refresh history cache
       _bgRefreshHistory();
     },
     function(err){
@@ -1614,44 +1547,20 @@ function updateQueueUI(){
   document.getElementById('syncN').textContent=n;
   document.getElementById('qbarN').textContent=n;
   document.getElementById('qbar').classList.toggle('on',n>0);
-  // Nút Sync trong qbar: luôn hiện khi có queue
-  var qbtn=document.getElementById('qbarSyncBtn');
-  if(qbtn){
-    qbtn.style.display = n>0 ? '' : 'none';
-    qbtn.textContent   = S.online ? '↑ Đồng bộ ngay' : '📴 Đang offline';
-    qbtn.style.background = S.online ? '#f59e0b' : '#9ca3af';
-    qbtn.disabled = !S.online;
-  }
+  document.getElementById('chipSync').classList.toggle('on',n>0&&S.online);
   var oc=document.getElementById('offlineQueueCount');
   if(oc)oc.textContent=n>0?(n+' phiên chờ sync'):'';
   var b=document.getElementById('nbBadge');b.style.display=n>0?'block':'none';b.textContent=n;
 }
-function tryAutoSync(){
-  if(S.online && S.queue.length > 0){
-    clearTimeout(_syncRetryTimer);
-    // Delay nhỏ để kết nối ổn định trước khi sync
-    setTimeout(_bgSyncQueue, 1000);
-  }
-}
+function tryAutoSync(){if(S.online&&S.queue.length>0)_bgSyncQueue();}
 function doSync(){
   if(!S.online||!S.queue.length)return;
-  if(_syncInProgress){showToast('⏳ Đang sync...','',2000);return;}
-  var pending = S.queue.filter(function(p){ return !p._synced; });
-  if(!pending.length){ S.queue=[]; saveQueue(); return; }
-  var total = pending.length;
-  showOverlay('Đang đồng bộ '+total+' phiên...','Gửi từng phiên riêng lẻ...');
-  _syncInProgress = true;
-  clearTimeout(_syncRetryTimer);
-  _syncOneByOne(pending, 0, 0, function(savedCount, failCount){
-    _syncInProgress = false;
-    hideOverlay();
-    if(failCount > 0){
-      showToast('✅ '+savedCount+' dòng đã lưu · ⚠️ '+failCount+' phiên lỗi, thử lại sau','',4000);
-    } else {
-      showToast('✅ Đồng bộ '+savedCount+' dòng ('+total+' phiên)','ok',3000);
-    }
-    _bgRefreshHistory();
-  });
+  showOverlay('Đang đồng bộ '+S.queue.length+' phiên...','');
+  var toSync=S.queue.slice();
+  gasSaveResults(toSync,
+    function(r){hideOverlay();if(r&&r.ok){S.queue.splice(0,toSync.length);saveQueue();H.lastQ='';showToast('✅ Đồng bộ '+r.saved+' dòng','ok');}else showToast('❌ Sync lỗi: '+(r&&r.error||''),'er');},
+    function(){hideOverlay();showToast('❌ Sync thất bại','er');}
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1671,12 +1580,11 @@ function showScreen(s){
   if(s==='B'){
     showStickyPB();
     document.getElementById('sBBar').classList.add('on');
-    // Không stopPAPolling() — giữ polling chạy ở Screen B
-    // để QC vẫn nhận notification HOLD/NOTE mới khi đang nhập kết quả
+    stopPAPolling();   // dừng poll khi đang kiểm tra
   } else {
     hideStickyPB();
     document.getElementById('sBBar').classList.remove('on');
-    if(s==='A' && !_paPollActive) startPAPolling(); // bật lại nếu chưa chạy
+    if(s==='A') startPAPolling(); // bật lại khi về Thông tin
   }
 }
 
@@ -2249,10 +2157,7 @@ function uniq(a){return a.filter(function(v,i,ar){return ar.indexOf(v)===i;});}
 // ══════════════════════════════════════════════════════════════
 // SAVE
 // ══════════════════════════════════════════════════════════════
-var _isSaving = false; // guard chống double-tap nút Lưu
 function doSave(){
-  if(_isSaving){ showToast('⏳ Đang lưu, vui lòng chờ...','',1500); return; }
-  _isSaving = true;
   var empty=0;
   S.items.forEach(function(it){
     if(it.isRemark)return;
@@ -2278,28 +2183,10 @@ function doSave(){
     else if(it.isDim){it.dimRows.forEach(function(r){results.push({itemId:it.itemId,itemcheck:it.itemcheck+' — '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});});}
     else{results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard,result:it.result||'',value:it.value||'',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});}
   });
-  // Mỗi lần lưu tạo 1 sessionId duy nhất — chống gộp, dễ debug
-  var sessionId = 'SID_'+now.getTime()+'_'+Math.random().toString(36).slice(2,7);
-  var payloads=[{
-    _sessionId: sessionId,
-    so:soJoinedF,
-    itemCode:icJoinedF.join(', '),
-    localCustomer:lcJoinedF.join(', '),
-    process:S.process,
-    inspector:S.email,
-    operatorId:S.operatorId||'',
-    machine:S.machine||'',
-    lotQty:S.lotQty||'',
-    aqlQty:S.aqlQty||'',
-    aqlAccept:S.aqlAccept||'',
-    timestamp:now.toISOString(),
-    results:results
-  }];
+  var payloads=[{so:soJoinedF,itemCode:icJoinedF.join(', '),localCustomer:lcJoinedF.join(', '),process:S.process,inspector:S.email,operatorId:S.operatorId||'',machine:S.machine||'',lotQty:S.lotQty||'',aqlQty:S.aqlQty||'',aqlAccept:S.aqlAccept||'',timestamp:now.toISOString(),results:results}];
   var nSaved=results.length;
-  // Push 1 payload duy nhất — KHÔNG push array lớn
-  S.queue.push(payloads[0]); saveQueue();
+  S.queue.push.apply(S.queue,payloads);saveQueue();
   _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length);
-  _isSaving = false; // reset guard sau khi đã push vào queue thành công
   showDone(nSaved,!S.online);
   if(S.online)_bgSyncQueue();
   var paRows=[];
@@ -2316,72 +2203,10 @@ function doSave(){
   if(paRows.length)_gasCall('savePayAttention',{rows:paRows},null,function(){});
 }
 
-var _syncInProgress = false;
-var _syncRetryTimer = null;
-var _SYNC_RETRY_MS  = 30000; // retry sau 30s nếu còn queue
-
 function _bgSyncQueue(){
-  if(!S.online || !S.queue.length) return;
-  if(_syncInProgress) return;
-  // Lọc payload chưa sync
-  var pending = S.queue.filter(function(p){ return !p._synced; });
-  if(!pending.length){ S.queue=[]; saveQueue(); return; }
-  _syncInProgress = true;
-  clearTimeout(_syncRetryTimer);
-  _syncOneByOne(pending, 0, 0, function(savedCount, failCount){
-    _syncInProgress = false;
-    if(savedCount > 0){
-      showToast('✅ Đã lưu '+savedCount+' dòng vào Sheet','ok',2500);
-      _bgRefreshHistory();
-    }
-    // Nếu còn payload lỗi → schedule retry tự động
-    var stillPending = S.queue.filter(function(p){ return !p._synced; });
-    if(stillPending.length > 0 && S.online){
-      _syncRetryTimer = setTimeout(function(){
-        if(S.online && S.queue.length > 0) _bgSyncQueue();
-      }, _SYNC_RETRY_MS);
-    }
-  });
-}
-
-function _syncOneByOne(queue, idx, savedCount, done){
-  if(idx >= queue.length){ done(savedCount, 0); return; }
-  var payload = queue[idx];
-  // Skip payload đã sync rồi (double-check)
-  if(payload._synced){
-    _syncOneByOne(queue, idx+1, savedCount, done);
-    return;
-  }
-  gasSaveResults([payload],
-    function(r){
-      if(r && r.ok){
-        payload._synced = true;
-        var qi = S.queue.indexOf(payload);
-        if(qi >= 0){
-          if(payload.results) payload.results.forEach(function(it){ it.photoBase64=''; });
-          S.queue.splice(qi, 1);
-          saveQueue();
-        }
-        // Tiếp tục payload kế tiếp dù thành công hay thất bại
-        _syncOneByOne(queue, idx+1, savedCount + (r.saved||0), done);
-      } else {
-        // GAS trả lỗi (vd: dedup, server busy) → log + BỎ QUA, tiếp tục payload kế tiếp
-        console.warn('[Sync] payload', idx, 'server error:', r&&r.error);
-        if(r && r.error && r.error.indexOf('bận') >= 0){
-          // Server busy → dừng, retry sau
-          done(savedCount, queue.length - idx);
-        } else {
-          // Lỗi khác (dedup, invalid...) → skip payload này, tiếp tục
-          _syncOneByOne(queue, idx+1, savedCount, done);
-        }
-      }
-    },
-    function(err){
-      // Network error → dừng chuỗi, retry sau
-      console.warn('[Sync] network error at payload', idx, err&&err.message);
-      done(savedCount, queue.length - idx);
-    }
-  );
+  if(!S.online||!S.queue.length)return;
+  var toSync=S.queue.slice();
+  gasSaveResults(toSync,function(r){if(r&&r.ok){toSync.forEach(function(p){if(p.results)p.results.forEach(function(it){it.photoBase64='';});});S.queue.splice(0,toSync.length);saveQueue();showToast('✅ Đã lưu '+r.saved+' dòng vào Sheet','ok',2500);_bgRefreshHistory();}},function(){});
 }
 
 function showDone(saved,offline){
@@ -2401,17 +2226,8 @@ function _injectSessionToHistory(ic,lc,okN,ngN,naN){
   var soArr=S.selectedSOs.slice();var soJoined=soArr.join(', ');var soDisp=soArr.length>1?soArr[0]+' +'+(soArr.length-1):soArr[0];
   var now=new Date();var dateStr=_padC(now.getDate())+'/'+_padC(now.getMonth()+1)+'/'+now.getFullYear();var timeStr=_padC(now.getHours())+':'+_padC(now.getMinutes())+':'+_padC(now.getSeconds());
   var items=[];S.items.forEach(function(it){if(it.isDelta){it.dRows.forEach(function(r){items.push({itemcheck:it.itemcheck+' — '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});}else if(it.isDim){it.dimRows.forEach(function(r){items.push({itemcheck:it.itemcheck+' — '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});}else{items.push({itemcheck:it.itemcheck,result:it.result||'',value:it.value||'',note:it.note||'',photo:''});}});
-  // Tìm sessionId từ queue item vừa thêm (item cuối cùng trong queue)
-  var _sid = (S.queue.length && S.queue[S.queue.length-1]._sessionId) ? S.queue[S.queue.length-1]._sessionId : ('LOC_'+now.getTime());
-  var sess={so:soJoined,soArr:soArr,soDisplay:soDisp,itemCode:ic,localCustomer:lc,
-    process:S.process,inspector:S.email,operatorId:S.operatorId||'',machine:S.machine||'',
-    date:dateStr,time:timeStr,tsNum:now.getTime(),
-    items:items,ok:okN,ng:ngN,na:naN,
-    _local:true, _sessionId:_sid};
-  // Xóa record local cũ có cùng sessionId (tránh duplicate khi render lại)
-  H.all=H.all.filter(function(s){return !s._sessionId||s._sessionId!==_sid;});
-  H.all.unshift(sess);
-  H.allLoaded=true;H._needBgRefresh=true;_rebuildDropdowns();
+  var sess={so:soJoined,soArr:soArr,soDisplay:soDisp,itemCode:ic,localCustomer:lc,process:S.process,inspector:S.email,operatorId:S.operatorId||'',machine:S.machine||'',date:dateStr,time:timeStr,tsNum:now.getTime(),items:items,ok:okN,ng:ngN,na:naN,_local:true};
+  H.all.unshift(sess);H.allLoaded=true;H._needBgRefresh=true;_rebuildDropdowns();
 }
 function _padC(n){return n<10?'0'+n:''+n;}
 
@@ -2479,49 +2295,13 @@ function doSearchAll(){
 }
 function onFilterChange(){clearTimeout(_hFilterTimer);clearTimeout(_hSearchTimer);if(H.allLoaded){applyClientFilter();}else{_hFilterTimer=setTimeout(function(){_serverLoad(1);},120);}}
 function gotoPage2(p){var filtered=H._filtered||H.all;var maxP=Math.ceil(filtered.length/H.pageSize);if(p<1||p>maxP)return;H.page=p;var start=(p-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);var f=getHFilter();requestAnimationFrame(function(){renderHistoryList(H.sessions,f.q);renderPagerClient(filtered.length);updateHStat(H.sessions,f);});var sb=document.getElementById('hScrollBody');if(sb)sb.scrollTop=0;}
-function _openHistory(){
-  // Hiện cache ngay nếu có, rồi refresh ngầm
-  var hc=null;
-  try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
-  var CACHE_TTL = 10*60*1000; // 10 phút
-  if(hc && hc.all && hc.all.length && (Date.now()-(hc.ts||0)) < CACHE_TTL){
-    H.all=hc.all; H.inspList=hc.inspList||[]; H.allLoaded=true; H.pageSize=60;
-    _rebuildDropdowns(); applyClientFilter();
-    _bgRefreshHistory(); // refresh ngầm
-    return;
-  }
-  if(H.allLoaded){applyClientFilter();_bgRefreshHistory();return;}
-  _serverLoad(1);
-}
+function _openHistory(){if(H.allLoaded){applyClientFilter();_bgRefreshHistory();return;}_serverLoad(1);}
 function _serverLoad(page){
-  if(!S.online){
-    // Offline → thử cache
-    var hc=null;
-    try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
-    if(hc&&hc.all&&hc.all.length){
-      H.all=hc.all;H.inspList=hc.inspList||[];H.allLoaded=true;H.pageSize=60;
-      _rebuildDropdowns();applyClientFilter();
-      showToast('📴 Lịch sử offline ('+hc.all.length+' phiên)','',3000);
-    } else {
-      document.getElementById('hList').innerHTML='<div class="empty"><span class="empty-ico">📵</span>Cần internet để xem lịch sử</div>';
-      document.getElementById('pager').style.display='none';
-    }
-    return;
-  }
-  var reqId=++_hReqId; showHLoading();
-  // dayLimit:6 — chỉ lấy 6 ngày gần nhất, nhanh hơn nhiều
-  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,dayLimit:6},
-    function(r){
-      if(reqId!==_hReqId)return;
-      hideHLoading();
-      if(!r||!r.ok){showToast('⚠️ Lỗi tải lịch sử','er');return;}
-      var raw=r.data||[];
-      H.all=raw; H.allLoaded=true; H.pageSize=60;
-      if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
-      applyClientFilter();
-      try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:raw.slice(0,200),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
-    },
-    function(){hideHLoading();showToast('⚠️ Lỗi kết nối','er');}
+  if(!S.online){document.getElementById('hList').innerHTML='<div class="empty"><span class="empty-ico">📵</span>Cần internet để xem lịch sử</div>';document.getElementById('pager').style.display='none';return;}
+  var reqId=++_hReqId;showHLoading();
+  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,pageSize:999,dayLimit:10},
+    function(r){if(reqId!==_hReqId)return;if(!r||!r.ok){showToast('⚠️ Lỗi tải lịch sử','er');hideHLoading();return;}var raw=r.data||[];H.all=raw.slice(0,300);H.allLoaded=true;H.pageSize=60;if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}applyClientFilter();},
+    function(){showToast('⚠️ Lỗi kết nối','er');hideHLoading();}
   );
 }
 function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(function(){
@@ -2538,14 +2318,15 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
     return;
   }
   var reqId=++_hReqId;var statEl=document.getElementById('hStat');if(statEl)statEl.style.opacity='0.55';
-  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,dayLimit:6},function(r){
+  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,pageSize:999,dayLimit:10},function(r){
     if(reqId!==_hReqId)return;if(statEl)statEl.style.opacity='';if(!r||!r.ok)return;
-    var newAll=(r.data||[]);
-    var changed=(newAll.length!==H.all.length)||(newAll.length>0&&H.all.length>0&&newAll[0].tsNum!==H.all[0].tsNum);
-    H.all=newAll;
+    var newAll300=(r.data||[]).slice(0,300);
+    var changed=(newAll300.length!==H.all.length)||(newAll300.length>0&&H.all.length>0&&newAll300[0].tsNum!==H.all[0].tsNum);
+    H.all=newAll300;
     if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
     if(changed)applyClientFilter();
-    try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:newAll.slice(0,200),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
+    // PWA: cache history
+    try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:newAll300.slice(0,100),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
   },function(){if(statEl)statEl.style.opacity='';});
 },300);}
 var _machineList = [];
@@ -2693,176 +2474,100 @@ function renderPagerClient(filteredTotal){var total=Math.ceil(filteredTotal/H.pa
 function updateHStat(data,f){var ngCnt=0;for(var i=0;i<data.length;i++){if(data[i].ng>0)ngCnt++;}var hasFilter=f.q||f.process||f.inspector;var total=H._filtered?H._filtered.length:H.all.length;document.getElementById('hStat').innerHTML='<span>'+(total?total+' phiên'+(hasFilter?' (đã lọc / '+H.all.length+' tổng)':''):'')+'</span>'+'<span>'+(data.length?(ngCnt>0?'<span style="color:var(--ng)">⚠️ '+ngCnt+' NG</span>':'<span style="color:var(--ok)">✅ Pass</span>'):'')+'</span>';}
 
 // DRAWER
-// ── DRAWER ───────────────────────────────────────────────────
-// _activeDrawerSess: session đang hiển thị, dùng closure để tránh race condition
-var _activeDrawerSess = null;
-
+var _activeDrawerSess=null;
 function openDrawer(sess){
-  _activeDrawerSess = sess;
-
-  // Luôn fetch items từ GAS khi có _dataFileId (không dùng cache items)
-  // Lý do: items cache có thể null, stale, hoặc bị lệch row
-  // Chỉ dùng items có sẵn nếu là session local (_local:true) vừa tạo trong phiên này
-  var needFetch = sess._dataFileId && !sess._local;
-
-  if(needFetch){
-    // Capture sess vào closure để tránh race condition khi user click nhiều row
-    (function(capturedSess){
+  _activeDrawerSess=sess;
+  // Lazy load: nếu items===null và có _dataFileId → fetch từ GAS trước
+  if(sess.items===null && sess._dataFileId && !sess._local){
+    (function(cap){
       // Hiện drawer skeleton ngay
+      var lbl=(cap.soArr&&cap.soArr.length>1)?cap.soArr.join(', '):cap.so;
+      document.getElementById('drTitle').textContent=lbl+(cap.itemCode?' - '+cap.itemCode:'');
+      document.getElementById('drSub').textContent=[cap.localCustomer,cap.process,cap.inspector,cap.date].filter(Boolean).join(' · ');
+      document.getElementById('drBody').innerHTML='<div style="padding:40px 16px;text-align:center;color:var(--txt3)"><div class="h-spinner" style="margin:0 auto 14px"></div><div style="font-size:13px">Đang tải hạng mục...</div></div>';
       document.getElementById('drawerBg').classList.add('on');
-      document.getElementById('drTitle').textContent =
-        ((capturedSess.soArr && capturedSess.soArr.length > 1)
-          ? capturedSess.soArr.join(', ') : capturedSess.so) +
-        (capturedSess.itemCode ? ' - ' + capturedSess.itemCode : '');
-      document.getElementById('drSub').textContent =
-        [capturedSess.localCustomer, capturedSess.process, capturedSess.inspector, capturedSess.date]
-        .filter(Boolean).join(' · ');
-      document.getElementById('drBody').innerHTML =
-        '<div style="padding:40px 16px;text-align:center;color:var(--txt3)">' +
-        '<div class="h-spinner" style="margin:0 auto 14px"></div>' +
-        '<div style="font-size:13px">Đang tải hạng mục...</div></div>';
-
-      _gasCall('loadItems',
-        {params:{
-          fileId:   capturedSess._dataFileId,
-          startRow: capturedSess._startRow,
-          endRow:   capturedSess._endRow
-        }},
+      _gasCall('loadItems',{params:{fileId:cap._dataFileId,startRow:cap._startRow,endRow:cap._endRow}},
         function(r){
-          // Chỉ render nếu user chưa click sang session khác
-          if(_activeDrawerSess !== capturedSess) return;
-          capturedSess.items = (r && r.ok && Array.isArray(r.items)) ? r.items : [];
-          _renderDrawer(capturedSess);
+          if(_activeDrawerSess!==cap)return; // user đã click sang session khác
+          cap.items=(r&&r.ok&&Array.isArray(r.items))?r.items:[];
+          _doOpenDrawer(cap);
         },
-        function(err){
-          if(_activeDrawerSess !== capturedSess) return;
-          capturedSess.items = [];
-          _renderDrawer(capturedSess);
-          showToast('⚠️ Không tải được hạng mục: ' + (err&&err.message||'lỗi mạng'), 'er', 4000);
+        function(){
+          if(_activeDrawerSess!==cap)return;
+          cap.items=[];
+          _doOpenDrawer(cap);
+          showToast('⚠️ Không tải được hạng mục','er',3000);
         }
       );
     })(sess);
     return;
   }
-
-  // Session local (_local:true): items đã có sẵn trong RAM → render ngay
-  _renderDrawer(sess);
+  _doOpenDrawer(sess);
 }
-
-function _renderDrawer(sess){
-  var soLabel = (sess.soArr && sess.soArr.length > 1) ? sess.soArr.join(', ') : sess.so;
-  document.getElementById('drTitle').textContent = soLabel + (sess.itemCode ? ' - ' + sess.itemCode : '');
-  document.getElementById('drSub').textContent =
-    [sess.localCustomer, sess.process, sess.inspector, sess.date].filter(Boolean).join(' · ');
-
-  var infoHTML = '';
-  if(sess.soArr && sess.soArr.length > 1){
-    infoHTML += '<div style="background:#eef2ff;border-radius:8px;padding:8px 12px;margin-bottom:8px">' +
-      '<div style="font-size:10px;color:var(--ac);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:4px">Sales Orders ('+sess.soArr.length+')</div>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:4px">' +
-      sess.soArr.map(function(s){
-        return '<span style="font-family:var(--mono);font-size:12px;background:#fff;border:1px solid #c7d2fe;border-radius:5px;padding:2px 8px;color:var(--ac);font-weight:600">'+esc(s)+'</span>';
-      }).join('') + '</div></div>';
+function _doOpenDrawer(sess){
+  var soLabel=(sess.soArr&&sess.soArr.length>1)?sess.soArr.join(', '):sess.so;
+  document.getElementById('drTitle').textContent=soLabel+(sess.itemCode?' - '+sess.itemCode:'');
+  document.getElementById('drSub').textContent=[sess.localCustomer,sess.process,sess.inspector,sess.date].filter(Boolean).join(' · ');
+  var infoHTML='';
+  if(sess.soArr&&sess.soArr.length>1){infoHTML+='<div style="background:#eef2ff;border-radius:8px;padding:8px 12px;margin-bottom:8px"><div style="font-size:10px;color:var(--ac);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin-bottom:4px">Sales Orders ('+sess.soArr.length+')</div><div style="display:flex;flex-wrap:wrap;gap:4px">'+sess.soArr.map(function(s){return'<span style="font-family:var(--mono);font-size:12px;background:#fff;border:1px solid #c7d2fe;border-radius:5px;padding:2px 8px;color:var(--ac);font-weight:600">'+esc(s)+'</span>';}).join('')+'</div></div>';}
+  if(sess.itemCode||sess.localCustomer)infoHTML+='<div style="background:#f9f9fb;border-radius:8px;padding:9px 12px;margin-bottom:10px">'+(sess.itemCode?'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Item Code</div><div style="font-family:var(--mono);margin-bottom:'+(sess.localCustomer?6:0)+'px">'+esc(sess.itemCode)+'</div>':'')+(sess.localCustomer?'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Local Customer</div><div>'+esc(sess.localCustomer)+'</div>':'')+'</div>';
+  // Thời gian check
+  // Parse ngày từ sess - tránh lỗi "Sat Dec 30 1899"
+  var _drDate='';
+  if(sess.date && sess.date.indexOf('/')>=0 && sess.date.length<=10){
+    _drDate=sess.date;
+  } else if(sess.tsNum && sess.tsNum>0){
+    var _dd=new Date(sess.tsNum);
+    _drDate=('0'+_dd.getDate()).slice(-2)+'/'+('0'+(_dd.getMonth()+1)).slice(-2)+'/'+_dd.getFullYear();
   }
-  if(sess.itemCode || sess.localCustomer){
-    infoHTML += '<div style="background:#f9f9fb;border-radius:8px;padding:9px 12px;margin-bottom:10px">' +
-      (sess.itemCode
-        ? '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Item Code</div>' +
-          '<div style="font-family:var(--mono);margin-bottom:'+(sess.localCustomer?6:0)+'px">'+esc(sess.itemCode)+'</div>' : '') +
-      (sess.localCustomer
-        ? '<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;font-weight:600">Local Customer</div>' +
-          '<div>'+esc(sess.localCustomer)+'</div>' : '') +
-      '</div>';
-  }
-
-  // Parse timestamp
-  var _drDate = '';
-  if(sess.date && sess.date.indexOf('/') >= 0 && sess.date.length <= 10){
-    _drDate = sess.date;
-  } else if(sess.tsNum && sess.tsNum > 0){
-    var _dd = new Date(sess.tsNum);
-    _drDate = ('0'+_dd.getDate()).slice(-2)+'/'+('0'+(_dd.getMonth()+1)).slice(-2)+'/'+_dd.getFullYear();
-  }
-  var _drTime = '';
+  // Giờ: lấy từ sess.time nếu hợp lệ (HH:mm:ss), fallback từ tsNum
+  var _drTime='';
   if(sess.time && /^\d{2}:\d{2}/.test(sess.time)){
-    _drTime = sess.time.slice(0,5);
-  } else if(sess.tsNum && sess.tsNum > 0){
-    var _dt = new Date(sess.tsNum);
-    _drTime = ('0'+_dt.getHours()).slice(-2)+':'+('0'+_dt.getMinutes()).slice(-2);
+    _drTime=sess.time.slice(0,5); // HH:mm
+  } else if(sess.tsNum && sess.tsNum>0){
+    var _dt=new Date(sess.tsNum);
+    _drTime=('0'+_dt.getHours()).slice(-2)+':'+('0'+_dt.getMinutes()).slice(-2);
   }
-  var checkTime = (_drDate && _drTime) ? _drDate+' '+_drTime : (_drDate || _drTime || '');
-
-  var items = sess.items || [];
-  var itemsHTML = '';
-  if(!items.length){
-    itemsHTML = '<div style="padding:16px;text-align:center;color:var(--txt3);font-size:13px">Không có dữ liệu hạng mục</div>';
-  } else {
-    var dphIdx = 0;
-    var rows = items.map(function(it){
-      var r  = it.result || '';
-      var rc = r==='OK'?'ok': r==='NG'?'ng': r==='NA'?'na': r?'cx':'em';
-      var badgeStyle = rc==='ok'  ? 'background:#dcfce7;color:var(--ok)'
-                     : rc==='ng'  ? 'background:#fee2e2;color:var(--ng)'
-                     : rc==='na'  ? 'background:#fef9c3;color:var(--na)'
-                     : rc==='cx'  ? 'background:#eff6ff;color:var(--ac)'
-                     :              'background:#f4f4f5;color:var(--txt3)';
-      var detail = '';
-      if(it.value) detail += '<span style="color:var(--ac);font-family:var(--mono);font-size:11px">📏 '+esc(it.value)+'</span>';
-      if(it.note)  detail += (detail?'<br>':'')+'<span style="color:var(--txt2);font-size:11px">💬 '+esc(it.note)+'</span>';
-      var photoHtml = '';
-      if(it.photo){
-        var pidx = 'dph_'+(dphIdx++);
-        photoHtml = '<div class="d-photo" id="'+pidx+'" data-url="'+esc(it.photo)+'"><div class="d-photo-loading">⏳</div></div>';
-      }
-      return '<tr style="border-bottom:1px solid var(--border)">'
-        +'<td style="padding:7px 8px;font-size:12px;color:var(--txt)">'+esc(it.itemcheck)+'</td>'
-        +'<td style="padding:7px 8px;text-align:center"><span style="display:inline-block;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:800;'+badgeStyle+'">'+esc(r||'—')+'</span></td>'
-        +'<td style="padding:7px 8px">'+(detail||'<span style="color:var(--txt3);font-size:11px">—</span>')+photoHtml+'</td>'
-        +'</tr>';
-    });
-    itemsHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px">'
-      +'<thead><tr style="background:#f4f4f8">'
-      +'<th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">Hạng mục</th>'
-      +'<th style="padding:6px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);width:52px">KQ</th>'
-      +'<th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">Value / Ghi chú</th>'
-      +'</tr></thead><tbody>'+rows.join('')+'</tbody></table>';
-  }
-
-  document.getElementById('drBody').innerHTML =
+  var checkTime = (_drDate&&_drTime) ? _drDate+' '+_drTime : (_drDate||_drTime||'');
+  document.getElementById('drBody').innerHTML=
+    // Tóm tắt OK/NG/NA + thời gian
     '<div class="sum-grid" style="margin-bottom:8px">'
     +'<div class="sum-box ok"><div class="sum-n">'+sess.ok+'</div><div class="sum-lbl">OK</div></div>'
     +'<div class="sum-box ng"><div class="sum-n">'+sess.ng+'</div><div class="sum-lbl">NG</div></div>'
     +'<div class="sum-box na"><div class="sum-n">'+sess.na+'</div><div class="sum-lbl">N/A</div></div>'
     +'</div>'
-    +(checkTime ? '<div style="font-size:11px;color:var(--txt3);margin-bottom:8px;font-family:var(--mono)">🕐 '+esc(checkTime)+'</div>' : '')
+    +(checkTime?'<div style="font-size:11px;color:var(--txt3);margin-bottom:8px;font-family:var(--mono)">🕐 '+esc(checkTime)+'</div>':'')
     +infoHTML
-    +'<div class="sec" style="margin-bottom:6px">Chi tiết hạng mục ('+items.length+')</div>'
-    +itemsHTML;
-
+    +'<div class="sec" style="margin-bottom:6px">Chi tiết hạng mục ('+sess.items.length+')</div>'
+    // Bảng hạng mục
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    +'<thead><tr style="background:#f4f4f8">'
+    +'<th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">Hạng mục</th>'
+    +'<th style="padding:6px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);width:52px">KQ</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">Value / Ghi chú</th>'
+    +'</tr></thead><tbody>'
+    +(function(){var dphIdx=0;return sess.items.map(function(it){
+      var r=it.result||'';
+      var rc=r==='OK'?'ok':r==='NG'?'ng':r==='NA'?'na':r?'cx':'em';
+      var badgeStyle=rc==='ok'?'background:#dcfce7;color:var(--ok)':rc==='ng'?'background:#fee2e2;color:var(--ng)':rc==='na'?'background:#fef9c3;color:var(--na)':rc==='cx'?'background:#eff6ff;color:var(--ac)':'background:#f4f4f5;color:var(--txt3)';
+      var detail='';
+      if(it.value)detail+='<span style="color:var(--ac);font-family:var(--mono);font-size:11px">📏 '+esc(it.value)+'</span>';
+      if(it.note)detail+=(detail?'<br>':'')+'<span style="color:var(--txt2);font-size:11px">💬 '+esc(it.note)+'</span>';
+      var photoHtml='';
+      if(it.photo){var pidx='dph_'+(dphIdx++);photoHtml='<div class="d-photo" id="'+pidx+'" data-url="'+esc(it.photo)+'"><div class="d-photo-loading">⏳</div></div>';}
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +'<td style="padding:7px 8px;font-size:12px;color:var(--txt)">'+esc(it.itemcheck)+'</td>'
+        +'<td style="padding:7px 8px;text-align:center"><span style="display:inline-block;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:800;'+badgeStyle+'">'+esc(r||'—')+'</span></td>'
+        +'<td style="padding:7px 8px">'+(detail||'<span style="color:var(--txt3);font-size:11px">—</span>')+photoHtml+'</td>'
+        +'</tr>';
+    }).join('');})()
+    +'</tbody></table>';
   document.getElementById('drawerBg').classList.add('on');
-  setTimeout(_loadDrawerPhotos, 100);
+  setTimeout(_loadDrawerPhotos,100);
 }
-
-function closeDr(){
-  document.getElementById('drawerBg').classList.remove('on');
-  _activeDrawerSess = null;
-}
-function _loadDrawerPhotos(){
-  var els=document.querySelectorAll('#drBody .d-photo[data-url]');
-  els.forEach(function(el){
-    var url=el.getAttribute('data-url');
-    if(!url)return;
-    if(url.indexOf('data:image')===0){_renderPhoto(el,url);return;}
-    _gasCall('getPhotoAsBase64',{driveUrl:url},
-      function(r){if(r&&r.ok)_renderPhoto(el,r.dataUrl);else el.innerHTML='<div class="d-photo-err">❌ Không tải được ảnh</div>';},
-      function(){el.innerHTML='<div class="d-photo-err">❌ Lỗi kết nối</div>';}
-    );
-  });
-}
-function _renderPhoto(el,dataUrl){
-  var viewUrl=driveViewUrl(el.getAttribute('data-url'));
-  el.innerHTML='<a href="'+viewUrl+'" target="_blank"><img src="'+dataUrl+'" alt="Ảnh kiểm tra"></a>';
-}
+function closeDr(){document.getElementById('drawerBg').classList.remove('on');_activeDrawerSess=null;}
+function _loadDrawerPhotos(){var els=document.querySelectorAll('#drBody .d-photo[data-url]');els.forEach(function(el){var url=el.getAttribute('data-url');if(!url)return;if(url.indexOf('data:image')===0){_renderPhoto(el,url);return;}_gasCall('getPhotoAsBase64',{driveUrl:url},function(r){if(r&&r.ok)_renderPhoto(el,r.dataUrl);else el.innerHTML='<div class="d-photo-err">❌ Không tải được ảnh</div>';},function(){el.innerHTML='<div class="d-photo-err">❌ Lỗi kết nối</div>';});});}
+function _renderPhoto(el,dataUrl){var viewUrl=driveViewUrl(el.getAttribute('data-url'));el.innerHTML='<a href="'+viewUrl+'" target="_blank"><img src="'+dataUrl+'" alt="Ảnh kiểm tra"></a>';}
 
 // UI HELPERS
 function showOverlay(t,s){document.getElementById('ovTitle').textContent=t;document.getElementById('ovSub').textContent=s||'';document.getElementById('overlay').classList.add('on');}
@@ -2986,13 +2691,6 @@ function startPAPolling(){
   _paPollActive = true;
   _schedulePAPoll();
   _scheduleHoldRemind();
-}
-function startPAPollingImmediate(){
-  // Boot từ cache → poll ngay lập tức thay vì chờ 10s
-  if(_paPollActive) return;
-  _paPollActive = true;
-  _scheduleHoldRemind();
-  setTimeout(_doPAPoll, 500); // delay nhỏ để UI render xong
 }
 function stopPAPolling(){
   _paPollActive = false;
