@@ -2651,18 +2651,23 @@ function renderHistoryList(data,q){
     var sess=data[i];
     var isNg=sess.ng>0;
 
-    // Thời gian: chỉ hiện ngày dd/MM/yyyy
-    // sess.date = "21/03/2026", sess.time = "HH:mm:ss"
-    // Nếu date bị lỗi (dạng Date object string) thì parse lại từ tsNum
-    var datePart='';
-    if(sess.date && sess.date.indexOf('/')>=0 && sess.date.length<=10){
-      datePart=sess.date; // đã đúng định dạng dd/MM/yyyy
-    } else if(sess.tsNum && sess.tsNum>0){
-      var _d=new Date(sess.tsNum);
-      datePart=('0'+_d.getDate()).slice(-2)+'/'+('0'+(_d.getMonth()+1)).slice(-2)+'/'+_d.getFullYear();
-    } else if(sess.date){
-      // Thử parse từ string bất kỳ
-      try{var _d2=new Date(sess.date);if(!isNaN(_d2.getTime())){datePart=('0'+_d2.getDate()).slice(-2)+'/'+('0'+(_d2.getMonth()+1)).slice(-2)+'/'+_d2.getFullYear();}}catch(e){}
+    // ── Parse ngày + giờ từ sess.date/sess.time (luôn dd/MM/yyyy và HH:mm:ss từ GAS) ──
+    var datePart='', timePart='';
+    // sess.date từ GAS getHistory đã là "dd/MM/yyyy" (lấy từ tsStr cột G)
+    if(sess.date && /^\d{2}\/\d{2}\/\d{4}$/.test((sess.date||'').trim())){
+      datePart = sess.date.trim();
+    }
+    // sess.time từ GAS getHistory đã là "HH:mm:ss" (lấy từ tsStr cột G)
+    if(sess.time && /^\d{2}:\d{2}/.test((sess.time||'').trim())){
+      timePart = sess.time.trim().slice(0,5); // HH:mm
+    }
+    // Fallback: nếu date/time vẫn thiếu → dùng Intl với timezone VN
+    if((!datePart||!timePart) && sess.tsNum>0){
+      try{
+        var _vd=new Date(sess.tsNum);
+        if(!datePart) datePart=_vd.toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric'});
+        if(!timePart) timePart=_vd.toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit',hour12:false});
+      }catch(e){}
     }
     if(!datePart) datePart='—';
 
@@ -2692,7 +2697,7 @@ function renderHistoryList(data,q){
       +'</div>';
 
     rows.push('<tr class="'+(isNg?'row-ng':'row-pass')+'" data-idx="'+i+'">'
-      +'<td class="h-td-time"><span class="h-time">'+esc(datePart)+'</span>'+(sess.time&&/^\d{2}:\d{2}/.test(sess.time)?'<span class="h-date">'+esc(sess.time.slice(0,5))+'</span>':'')+'</td>'
+      +'<td class="h-td-time"><span class="h-time">'+esc(datePart)+'</span>'+(timePart?'<span class="h-date">'+esc(timePart)+'</span>':'')+'</td>'
       +'<td class="h-td-proc"><span class="h-proc-badge">'+esc(sess.process||'-')+'</span></td>'
       +'<td class="h-td-so">'+soCell+'</td>'
       +'<td class="h-td-ic">'+icCell+'</td>'
@@ -2792,39 +2797,21 @@ function _renderDrawer(sess){
       '</div>';
   }
 
-  // Parse timestamp — ưu tiên sess.date + sess.time từ GAS (đã là giờ VN)
-  // KHÔNG dùng new Date(tsNum).toString() vì sẽ hiện timezone string xấu
-  var _drDate = '';
-  var _drTime = '';
-  // Ưu tiên 1: sess.date dạng "dd/MM/yyyy" và sess.time dạng "HH:mm:ss"
-  if(sess.date && /^\d{2}\/\d{2}\/\d{4}$/.test(sess.date.trim())){
+  // Parse timestamp cho drawer — từ sess.date/time (dd/MM/yyyy + HH:mm:ss giờ VN)
+  var _drDate='', _drTime='';
+  if(sess.date && /^\d{2}\/\d{2}\/\d{4}$/.test((sess.date||'').trim()))
     _drDate = sess.date.trim();
-  }
-  if(sess.time && /^\d{2}:\d{2}/.test(sess.time.trim())){
+  if(sess.time && /^\d{2}:\d{2}/.test((sess.time||'').trim()))
     _drTime = sess.time.trim().slice(0,8); // HH:mm:ss
-  }
-  // Fallback: parse từ tsNum chỉ khi thiếu cả hai
-  if(!_drDate && sess.tsNum > 0){
-    // Dùng Intl để ra giờ VN
+  // Fallback dùng Intl timezone VN
+  if((!_drDate||!_drTime) && sess.tsNum>0){
     try{
-      var _vnd = new Date(sess.tsNum);
-      var _vnParts = _vnd.toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric'}).split('/');
-      if(_vnParts.length===3) _drDate = _vnParts[0]+'/'+_vnParts[1]+'/'+_vnParts[2];
-    }catch(e){
-      var _dd2=new Date(sess.tsNum);
-      _drDate=('0'+_dd2.getDate()).slice(-2)+'/'+('0'+(_dd2.getMonth()+1)).slice(-2)+'/'+_dd2.getFullYear();
-    }
+      var _vd2=new Date(sess.tsNum);
+      if(!_drDate) _drDate=_vd2.toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric'});
+      if(!_drTime) _drTime=_vd2.toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    }catch(e){}
   }
-  if(!_drTime && sess.tsNum > 0){
-    try{
-      var _vnt=new Date(sess.tsNum);
-      _drTime=_vnt.toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-    }catch(e){
-      var _dt2=new Date(sess.tsNum);
-      _drTime=('0'+_dt2.getHours()).slice(-2)+':'+('0'+_dt2.getMinutes()).slice(-2)+':'+('0'+_dt2.getSeconds()).slice(-2);
-    }
-  }
-  var checkTime = (_drDate&&_drTime) ? _drDate+' '+_drTime : (_drDate||_drTime||'');
+  var checkTime=(_drDate&&_drTime)?_drDate+' '+_drTime:(_drDate||_drTime||'');
 
   var items = sess.items || [];
   var itemsHTML = '';
