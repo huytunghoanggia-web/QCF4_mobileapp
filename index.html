@@ -38,7 +38,7 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
   position:fixed;inset:0;z-index:900;
   background:linear-gradient(160deg,#1a0f6b 0%,#4630EB 55%,#6C56F5 100%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:calc(env(safe-area-inset-top,0px) + 24px) 24px calc(env(safe-area-inset-bottom,0px) + 24px);
+  padding:24px;
 }
 #pgLogin.hidden{display:none}
 
@@ -135,11 +135,7 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
 #appShell.on{display:flex}
 
 /* TOPBAR */
-.tb{background:#4630EB;display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(70,48,235,.25);
-  /* iPhone safe area — tránh bị che bởi notch / Dynamic Island */
-  padding-top:env(safe-area-inset-top,0px);
-  min-height:calc(56px + env(safe-area-inset-top,0px));
-}
+.tb{background:#4630EB;height:56px;display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(70,48,235,.25)}
 .logo{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-.5px}
 .tb-name{font-size:16px;font-weight:800;color:#fff;letter-spacing:-.4px}
 .tb-ver{font-size:9px;color:rgba(255,255,255,.55);font-family:var(--mono)}
@@ -727,9 +723,11 @@ input[type=file]{display:none}
   <div><div class="tb-name">Rpac_Tung_QC_checksheet</div><div class="tb-ver">v4.9</div></div>
   <div class="tb-right">
     <div class="chip chip-off" id="chipOff"><div class="dot-off"></div>Offline</div>
-    <div class="chip chip-sync" id="chipSync" onclick="doSync()" style="display:none!important">↑ Sync (<span id="syncN">0</span>)</div>
-    <div class="chip" id="chipRefresh" onclick="doRefreshData()" title="Tải dữ liệu mới từ server"
-         style="display:flex;background:#eff6ff;border:1px solid #bfdbfe;color:#3730a3;cursor:pointer">
+    <div class="chip chip-sync" id="chipSync" onclick="doSync()">↑ Sync (<span id="syncN">0</span>)</div>
+    <div id="chipRefresh" onclick="doRefreshData()" title="Tải dữ liệu mới từ server"
+         style="display:flex!important;align-items:center;gap:4px;border-radius:20px;padding:3px 9px;
+         font-size:11px;font-weight:500;background:#eff6ff;border:1px solid #bfdbfe;
+         color:#3730a3;cursor:pointer;touch-action:manipulation">
       🔄 <span id="refreshTxt">Cập nhật</span>
     </div>
     <!-- User chip — click để xem menu đăng xuất -->
@@ -762,13 +760,7 @@ input[type=file]{display:none}
 <!-- QUEUE BAR -->
 <div class="qbar" id="qbar">
   <span>⚡ <span id="qbarN">0</span> phiên chờ sync</span>
-  <button onclick="doSync()" id="qbarSyncBtn"
-    style="background:#f59e0b;border:none;border-radius:20px;padding:5px 14px;
-           font-size:12px;font-weight:700;color:#fff;cursor:pointer;
-           touch-action:manipulation;font-family:var(--font);
-           box-shadow:0 2px 6px rgba(0,0,0,.15)">
-    ↑ Đồng bộ ngay
-  </button>
+  <span style="font-size:10px;opacity:.6">Tự sync khi có mạng</span>
 </div>
 
 <!-- OVERLAY -->
@@ -1126,7 +1118,7 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbzGV8ev1MZ55museZH8WQ7dkCHcoHOtNuaxCQ_Lelvzrkrkm3VFUJC7M6DkLFS7zz_fCg/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbysmYMLALPTUgfqATKBpAsCRASJd22QRwNpE38ydqdYFKevZgTkTI5Ld2fMnE2lNvG68A/exec';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -1276,6 +1268,14 @@ document.addEventListener('click',function(e){
 // BOOT — Tải dữ liệu sau khi đăng nhập
 // ══════════════════════════════════════════════════════════════
 window.onload = function(){
+  // Xóa history cache cũ để tránh hiện data sai timezone
+  try{
+    var _hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');
+    // Nếu cache cũ hơn 1 ngày → xóa để fetch lại từ GAS
+    if(_hc && (!_hc.ts || Date.now()-_hc.ts > 24*3600*1000)){
+      localStorage.removeItem('rpac_hist_cache');
+    }
+  }catch(e){}
   loadQueue(); watchNetwork(); startClock(); initPWA();
   try{
     var saved = JSON.parse(localStorage.getItem(LKEY)||'null');
@@ -1597,6 +1597,13 @@ function _hidePWABanners(){
 function watchNetwork(){
   window.addEventListener('online', function(){S.online=true;updateNetUI();tryAutoSync();},{passive:true});
   window.addEventListener('offline',function(){S.online=false;updateNetUI();},{passive:true});
+  // Periodic sync: mỗi 30s kiểm tra nếu còn queue chưa sync
+  setInterval(function(){
+    if(S.online && S.queue.length>0 && !_syncInProgress){
+      console.log('[Sync] Periodic check: '+S.queue.length+' items pending');
+      tryAutoSync();
+    }
+  }, 30000);
   updateNetUI();
 }
 function updateNetUI(){
@@ -1614,42 +1621,28 @@ function updateQueueUI(){
   document.getElementById('syncN').textContent=n;
   document.getElementById('qbarN').textContent=n;
   document.getElementById('qbar').classList.toggle('on',n>0);
-  // Nút Sync trong qbar: luôn hiện khi có queue
-  var qbtn=document.getElementById('qbarSyncBtn');
-  if(qbtn){
-    qbtn.style.display = n>0 ? '' : 'none';
-    qbtn.textContent   = S.online ? '↑ Đồng bộ ngay' : '📴 Đang offline';
-    qbtn.style.background = S.online ? '#f59e0b' : '#9ca3af';
-    qbtn.disabled = !S.online;
-  }
+  document.getElementById('chipSync').classList.toggle('on',n>0&&S.online);
   var oc=document.getElementById('offlineQueueCount');
   if(oc)oc.textContent=n>0?(n+' phiên chờ sync'):'';
   var b=document.getElementById('nbBadge');b.style.display=n>0?'block':'none';b.textContent=n;
 }
-function tryAutoSync(){
-  if(S.online && S.queue.length > 0){
-    clearTimeout(_syncRetryTimer);
-    // Delay nhỏ để kết nối ổn định trước khi sync
-    setTimeout(_bgSyncQueue, 1000);
-  }
-}
+function tryAutoSync(){if(S.online&&S.queue.length>0)_bgSyncQueue();}
 function doSync(){
+  // Reset nếu bị kẹt
+  if(_syncInProgress){
+    _setSyncInProgress(false);
+    console.log('[Sync] Manual reset _syncInProgress');
+  }
   if(!S.online||!S.queue.length)return;
   if(_syncInProgress){showToast('⏳ Đang sync...','',2000);return;}
-  var pending = S.queue.filter(function(p){ return !p._synced; });
-  if(!pending.length){ S.queue=[]; saveQueue(); return; }
-  var total = pending.length;
+  var total=S.queue.length;
   showOverlay('Đang đồng bộ '+total+' phiên...','Gửi từng phiên riêng lẻ...');
-  _syncInProgress = true;
-  clearTimeout(_syncRetryTimer);
-  _syncOneByOne(pending, 0, 0, function(savedCount, failCount){
-    _syncInProgress = false;
+  _setSyncInProgress(true);
+  _syncOneByOne(S.queue.slice(), 0, 0, function(savedCount){
+    _syncInProgress=false;
     hideOverlay();
-    if(failCount > 0){
-      showToast('✅ '+savedCount+' dòng đã lưu · ⚠️ '+failCount+' phiên lỗi, thử lại sau','',4000);
-    } else {
-      showToast('✅ Đồng bộ '+savedCount+' dòng ('+total+' phiên)','ok',3000);
-    }
+    H.lastQ='';
+    showToast('✅ Đồng bộ '+savedCount+' dòng ('+total+' phiên)','ok',3000);
     _bgRefreshHistory();
   });
 }
@@ -2302,84 +2295,116 @@ function doSave(){
   _isSaving = false; // reset guard sau khi đã push vào queue thành công
   showDone(nSaved,!S.online);
   if(S.online)_bgSyncQueue();
+  // ── Gom ghi chú từ TẤT CẢ nguồn ──────────────────────────
   var paRows=[];
+  var soMap2=getSOMap();
+  var _ic=uniq(S.selectedSOs.map(function(s){return(soMap2[s]||S.soMeta[s]||{}).itemCode||'';})).filter(Boolean).join(', ');
+  var _lc=uniq(S.selectedSOs.map(function(s){return(soMap2[s]||S.soMeta[s]||{}).localCustomer||'';})).filter(Boolean).join(', ');
+  var _so=S.selectedSOs.join(', ');
+  var _ts=now.toISOString();
+
+  // 1. Ghi chú từng hạng mục check (it.note) — không phải Remark_order
   S.items.forEach(function(it){
-    if(!it.isRemark||!it.note.trim())return;
-    S.selectedSOs.forEach(function(so){
-      paRows.push({
-        so:so,itemCode:'',localCustomer:'',
-        remark:it.note.trim(),email:S.email,timestamp:now.toISOString(),
-        photoBase64:it.photoBase64||'',photoName:it.photoName||''
-      });
+    if(it.isRemark) return; // Remark_order xử lý riêng bên dưới
+    if(!it.note||!it.note.trim()) return;
+    paRows.push({
+      so:_so, itemCode:_ic, localCustomer:_lc,
+      remark:'['+esc2(it.itemcheck)+'] '+it.note.trim(),
+      remarkType:'NOTE',
+      email:S.email, timestamp:_ts,
+      photoBase64:'', photoName:''
     });
   });
+
+  // 2. Remark_order (it.isRemark — hạng mục đặc biệt)
+  S.items.forEach(function(it){
+    if(!it.isRemark||!it.note||!it.note.trim()) return;
+    paRows.push({
+      so:_so, itemCode:_ic, localCustomer:_lc,
+      remark:'[Remark đơn hàng] '+it.note.trim(),
+      remarkType: it.note.toUpperCase().indexOf('HOLD')>=0 ? 'HOLD' : 'NOTE',
+      email:S.email, timestamp:_ts,
+      photoBase64:it.photoBase64||'', photoName:it.photoName||''
+    });
+  });
+
+  // 3. noteRemark (ô ghi chú tự do ở cuối màn hình B)
+  var noteRemarkEl=document.getElementById('noteRemark');
+  if(noteRemarkEl && noteRemarkEl.value.trim()){
+    paRows.push({
+      so:_so, itemCode:_ic, localCustomer:_lc,
+      remark:'[Ghi chú đơn hàng] '+noteRemarkEl.value.trim(),
+      remarkType: noteRemarkEl.value.toUpperCase().indexOf('HOLD')>=0 ? 'HOLD' : 'NOTE',
+      email:S.email, timestamp:_ts,
+      photoBase64:'', photoName:''
+    });
+  }
+
   if(paRows.length)_gasCall('savePayAttention',{rows:paRows},null,function(){});
 }
 
-var _syncInProgress = false;
-var _syncRetryTimer = null;
-var _SYNC_RETRY_MS  = 30000; // retry sau 30s nếu còn queue
-
 function _bgSyncQueue(){
-  if(!S.online || !S.queue.length) return;
-  if(_syncInProgress) return;
-  // Lọc payload chưa sync
+  // Gửi TỪNG payload một, không batch — tránh GAS gộp nhiều phiên thành 1 record
+  if(!S.online||!S.queue.length)return;
+  if(_syncInProgress)return; // chống double-fire
+  // Lọc bỏ payload đã được đánh dấu _synced (tránh gửi lại khi mạng chập chờn)
   var pending = S.queue.filter(function(p){ return !p._synced; });
   if(!pending.length){ S.queue=[]; saveQueue(); return; }
-  _syncInProgress = true;
-  clearTimeout(_syncRetryTimer);
-  _syncOneByOne(pending, 0, 0, function(savedCount, failCount){
-    _syncInProgress = false;
-    if(savedCount > 0){
-      showToast('✅ Đã lưu '+savedCount+' dòng vào Sheet','ok',2500);
+  _setSyncInProgress(true);
+  _syncOneByOne(pending.slice(), 0, 0, function(totalSaved){
+    _setSyncInProgress(false);
+    if(totalSaved>0){
+      showToast('✅ Đã lưu '+totalSaved+' dòng vào Sheet','ok',2500);
       _bgRefreshHistory();
-    }
-    // Nếu còn payload lỗi → schedule retry tự động
-    var stillPending = S.queue.filter(function(p){ return !p._synced; });
-    if(stillPending.length > 0 && S.online){
-      _syncRetryTimer = setTimeout(function(){
-        if(S.online && S.queue.length > 0) _bgSyncQueue();
-      }, _SYNC_RETRY_MS);
     }
   });
 }
-
-function _syncOneByOne(queue, idx, savedCount, done){
-  if(idx >= queue.length){ done(savedCount, 0); return; }
-  var payload = queue[idx];
-  // Skip payload đã sync rồi (double-check)
-  if(payload._synced){
-    _syncOneByOne(queue, idx+1, savedCount, done);
-    return;
+var _syncInProgress=false;
+var _syncProgressTimer=null;
+function _setSyncInProgress(val){
+  _syncInProgress=val;
+  if(_syncProgressTimer){clearTimeout(_syncProgressTimer);_syncProgressTimer=null;}
+  if(val){
+    // Auto-reset sau 60s để tránh kẹt vĩnh viễn
+    _syncProgressTimer=setTimeout(function(){
+      if(_syncInProgress){
+        console.warn('[Sync] Force reset _syncInProgress after 60s timeout');
+        _syncInProgress=false;
+        if(S.online&&S.queue.length>0) tryAutoSync();
+      }
+    },60000);
   }
+}
+function _syncOneByOne(queue, idx, savedCount, done){
+  if(idx>=queue.length){ done(savedCount); return; }
+  var payload=queue[idx];
   gasSaveResults([payload],
     function(r){
-      if(r && r.ok){
+      if(r&&r.ok){
+        // Đánh dấu payload đã sync — ngăn gửi lại nếu còn trong queue
         payload._synced = true;
-        var qi = S.queue.indexOf(payload);
-        if(qi >= 0){
-          if(payload.results) payload.results.forEach(function(it){ it.photoBase64=''; });
-          S.queue.splice(qi, 1);
+        // Xóa payload đã sync khỏi queue thực
+        var qi=S.queue.indexOf(payload);
+        if(qi>=0){
+          if(payload.results)payload.results.forEach(function(it){it.photoBase64='';});
+          S.queue.splice(qi,1);
           saveQueue();
         }
-        // Tiếp tục payload kế tiếp dù thành công hay thất bại
-        _syncOneByOne(queue, idx+1, savedCount + (r.saved||0), done);
+        _syncOneByOne(queue, idx+1, savedCount+(r.saved||0), done);
       } else {
-        // GAS trả lỗi (vd: dedup, server busy) → log + BỎ QUA, tiếp tục payload kế tiếp
-        console.warn('[Sync] payload', idx, 'server error:', r&&r.error);
-        if(r && r.error && r.error.indexOf('bận') >= 0){
-          // Server busy → dừng, retry sau
-          done(savedCount, queue.length - idx);
-        } else {
-          // Lỗi khác (dedup, invalid...) → skip payload này, tiếp tục
-          _syncOneByOne(queue, idx+1, savedCount, done);
-        }
+        // Lỗi 1 payload → dừng, giữ lại trong queue, thử lại sau
+        _syncInProgress=false;
+        console.warn('[Sync] payload',idx,'failed:',r&&r.error);
+        if(savedCount>0) showToast('✅ Đã lưu '+savedCount+' dòng, còn '+(queue.length-idx)+' chờ sync','ok',3000);
       }
     },
-    function(err){
-      // Network error → dừng chuỗi, retry sau
-      console.warn('[Sync] network error at payload', idx, err&&err.message);
-      done(savedCount, queue.length - idx);
+    function(){
+      _setSyncInProgress(false);
+      console.warn('[Sync] network error at payload',idx);
+      // Retry sau 10 giây nếu còn online
+      setTimeout(function(){
+        if(S.online && S.queue.length > 0) tryAutoSync();
+      }, 10000);
     }
   );
 }
@@ -2509,8 +2534,8 @@ function _serverLoad(page){
     return;
   }
   var reqId=++_hReqId; showHLoading();
-  // dayLimit:6 — chỉ lấy 6 ngày gần nhất, nhanh hơn nhiều
-  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,dayLimit:6},
+  // Không dùng dayLimit — lấy toàn bộ HIST_MONTHS tháng, mới nhất lên đầu
+  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,maxSessions:300},
     function(r){
       if(reqId!==_hReqId)return;
       hideHLoading();
@@ -2538,7 +2563,7 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
     return;
   }
   var reqId=++_hReqId;var statEl=document.getElementById('hStat');if(statEl)statEl.style.opacity='0.55';
-  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,dayLimit:6},function(r){
+  gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,maxSessions:300},function(r){
     if(reqId!==_hReqId)return;if(statEl)statEl.style.opacity='';if(!r||!r.ok)return;
     var newAll=(r.data||[]);
     var changed=(newAll.length!==H.all.length)||(newAll.length>0&&H.all.length>0&&newAll[0].tsNum!==H.all[0].tsNum);
@@ -2634,18 +2659,26 @@ function renderHistoryList(data,q){
     var sess=data[i];
     var isNg=sess.ng>0;
 
-    // Thời gian: chỉ hiện ngày dd/MM/yyyy
-    // sess.date = "21/03/2026", sess.time = "HH:mm:ss"
-    // Nếu date bị lỗi (dạng Date object string) thì parse lại từ tsNum
-    var datePart='';
-    if(sess.date && sess.date.indexOf('/')>=0 && sess.date.length<=10){
-      datePart=sess.date; // đã đúng định dạng dd/MM/yyyy
-    } else if(sess.tsNum && sess.tsNum>0){
-      var _d=new Date(sess.tsNum);
-      datePart=('0'+_d.getDate()).slice(-2)+'/'+('0'+(_d.getMonth()+1)).slice(-2)+'/'+_d.getFullYear();
-    } else if(sess.date){
-      // Thử parse từ string bất kỳ
-      try{var _d2=new Date(sess.date);if(!isNaN(_d2.getTime())){datePart=('0'+_d2.getDate()).slice(-2)+'/'+('0'+(_d2.getMonth()+1)).slice(-2)+'/'+_d2.getFullYear();}}catch(e){}
+    // ── Parse ngày + giờ (UTC+7 Việt Nam) ──────────────────────
+    var datePart='', timePart='';
+    // Nguồn 1: sess.date "dd/MM/yyyy" từ GAS
+    if(sess.date && /^\d{2}\/\d{2}\/\d{4}$/.test((sess.date||'').trim()))
+      datePart=sess.date.trim();
+    // Nguồn 2: sess.time "HH:mm:ss" từ GAS
+    if(sess.time && /^\d{2}:\d{2}/.test((sess.time||'').trim()))
+      timePart=sess.time.trim().slice(0,5);
+    // Fallback: tính thủ công UTC+7 từ tsNum (không dùng Intl vì format không ổn định)
+    if((!datePart||!timePart) && sess.tsNum>0){
+      var _vn=new Date(sess.tsNum+7*3600*1000); // shift sang UTC+7
+      if(!datePart){
+        datePart=('0'+_vn.getUTCDate()).slice(-2)+'/'
+               +('0'+(_vn.getUTCMonth()+1)).slice(-2)+'/'
+               +_vn.getUTCFullYear();
+      }
+      if(!timePart){
+        timePart=('0'+_vn.getUTCHours()).slice(-2)+':'
+                +('0'+_vn.getUTCMinutes()).slice(-2);
+      }
     }
     if(!datePart) datePart='—';
 
@@ -2675,7 +2708,7 @@ function renderHistoryList(data,q){
       +'</div>';
 
     rows.push('<tr class="'+(isNg?'row-ng':'row-pass')+'" data-idx="'+i+'">'
-      +'<td class="h-td-time"><span class="h-time">'+esc(datePart)+'</span>'+(sess.time&&sess.time.length<=8?'<span class="h-date">'+esc(sess.time.slice(0,5))+'</span>':'')+'</td>'
+      +'<td class="h-td-time"><span class="h-time">'+esc(datePart)+'</span>'+(timePart?'<span class="h-date">'+esc(timePart)+'</span>':'')+'</td>'
       +'<td class="h-td-proc"><span class="h-proc-badge">'+esc(sess.process||'-')+'</span></td>'
       +'<td class="h-td-so">'+soCell+'</td>'
       +'<td class="h-td-ic">'+icCell+'</td>'
@@ -2752,8 +2785,11 @@ function openDrawer(sess){
 function _renderDrawer(sess){
   var soLabel = (sess.soArr && sess.soArr.length > 1) ? sess.soArr.join(', ') : sess.so;
   document.getElementById('drTitle').textContent = soLabel + (sess.itemCode ? ' - ' + sess.itemCode : '');
+  // drSub: dùng sess.date nếu đúng format, không thì để trống (sẽ cập nhật sau khi parse)
+  var _rawDate=sess.date||'';
+  var _subDate=/^\d{2}\/\d{2}\/\d{4}$/.test(_rawDate.trim())?_rawDate.trim():'';
   document.getElementById('drSub').textContent =
-    [sess.localCustomer, sess.process, sess.inspector, sess.date].filter(Boolean).join(' · ');
+    [sess.localCustomer, sess.process, sess.inspector, _subDate].filter(Boolean).join(' · ');
 
   var infoHTML = '';
   if(sess.soArr && sess.soArr.length > 1){
@@ -2775,22 +2811,22 @@ function _renderDrawer(sess){
       '</div>';
   }
 
-  // Parse timestamp
-  var _drDate = '';
-  if(sess.date && sess.date.indexOf('/') >= 0 && sess.date.length <= 10){
-    _drDate = sess.date;
-  } else if(sess.tsNum && sess.tsNum > 0){
-    var _dd = new Date(sess.tsNum);
-    _drDate = ('0'+_dd.getDate()).slice(-2)+'/'+('0'+(_dd.getMonth()+1)).slice(-2)+'/'+_dd.getFullYear();
+  // Parse timestamp drawer — UTC+7 VN
+  var _drDate='', _drTime='';
+  if(sess.date && /^\d{2}\/\d{2}\/\d{4}$/.test((sess.date||'').trim()))
+    _drDate=sess.date.trim();
+  if(sess.time && /^\d{2}:\d{2}/.test((sess.time||'').trim()))
+    _drTime=sess.time.trim().slice(0,8);
+  if((!_drDate||!_drTime) && sess.tsNum>0){
+    var _vnDr=new Date(sess.tsNum+7*3600*1000);
+    if(!_drDate) _drDate=('0'+_vnDr.getUTCDate()).slice(-2)+'/'
+                         +('0'+(_vnDr.getUTCMonth()+1)).slice(-2)+'/'
+                         +_vnDr.getUTCFullYear();
+    if(!_drTime) _drTime=('0'+_vnDr.getUTCHours()).slice(-2)+':'
+                         +('0'+_vnDr.getUTCMinutes()).slice(-2)+':'
+                         +('0'+_vnDr.getUTCSeconds()).slice(-2);
   }
-  var _drTime = '';
-  if(sess.time && /^\d{2}:\d{2}/.test(sess.time)){
-    _drTime = sess.time.slice(0,5);
-  } else if(sess.tsNum && sess.tsNum > 0){
-    var _dt = new Date(sess.tsNum);
-    _drTime = ('0'+_dt.getHours()).slice(-2)+':'+('0'+_dt.getMinutes()).slice(-2);
-  }
-  var checkTime = (_drDate && _drTime) ? _drDate+' '+_drTime : (_drDate || _drTime || '');
+  var checkTime=(_drDate&&_drTime)?_drDate+' '+_drTime:(_drDate||_drTime||'');
 
   var items = sess.items || [];
   var itemsHTML = '';
