@@ -2452,7 +2452,7 @@ function doSave(){
     if(it.isRemark) return; // Remark_order xử lý riêng bên dưới
     if(!it.note||!it.note.trim()) return;
     paRows.push({
-      so:_so, itemCode:'', localCustomer:'',
+      so:_so, itemCode:_ic, localCustomer:_lc,
       remark:'['+esc2(it.itemcheck)+'] '+it.note.trim(),
       remarkType:'NOTE',
       email:S.email, timestamp:_ts,
@@ -2464,7 +2464,7 @@ function doSave(){
   S.items.forEach(function(it){
     if(!it.isRemark||!it.note||!it.note.trim()) return;
     paRows.push({
-      so:_so, itemCode:'', localCustomer:'',
+      so:_so, itemCode:_ic, localCustomer:_lc,
       remark:'[Remark đơn hàng] '+it.note.trim(),
       remarkType: it.note.toUpperCase().indexOf('HOLD')>=0 ? 'HOLD' : 'NOTE',
       email:S.email, timestamp:_ts,
@@ -2476,7 +2476,7 @@ function doSave(){
   var noteRemarkEl=document.getElementById('noteRemark');
   if(noteRemarkEl && noteRemarkEl.value.trim()){
     paRows.push({
-      so:_so, itemCode:'', localCustomer:'',
+      so:_so, itemCode:_ic, localCustomer:_lc,
       remark:'[Ghi chú đơn hàng] '+noteRemarkEl.value.trim(),
       remarkType: noteRemarkEl.value.toUpperCase().indexOf('HOLD')>=0 ? 'HOLD' : 'NOTE',
       email:S.email, timestamp:_ts,
