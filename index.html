@@ -2452,7 +2452,7 @@ function doSave(){
     if(it.isRemark) return; // Remark_order xử lý riêng bên dưới
     if(!it.note||!it.note.trim()) return;
     paRows.push({
-      so:_so, itemCode:_ic, localCustomer:_lc,
+      so:_so, itemCode:'', localCustomer:'',
       remark:'['+esc2(it.itemcheck)+'] '+it.note.trim(),
       remarkType:'NOTE',
       email:S.email, timestamp:_ts,
@@ -2464,7 +2464,7 @@ function doSave(){
   S.items.forEach(function(it){
     if(!it.isRemark||!it.note||!it.note.trim()) return;
     paRows.push({
-      so:_so, itemCode:_ic, localCustomer:_lc,
+      so:_so, itemCode:'', localCustomer:'',
       remark:'[Remark đơn hàng] '+it.note.trim(),
       remarkType: it.note.toUpperCase().indexOf('HOLD')>=0 ? 'HOLD' : 'NOTE',
       email:S.email, timestamp:_ts,
@@ -2476,7 +2476,7 @@ function doSave(){
   var noteRemarkEl=document.getElementById('noteRemark');
   if(noteRemarkEl && noteRemarkEl.value.trim()){
     paRows.push({
-      so:_so, itemCode:_ic, localCustomer:_lc,
+      so:_so, itemCode:'', localCustomer:'',
       remark:'[Ghi chú đơn hàng] '+noteRemarkEl.value.trim(),
       remarkType: noteRemarkEl.value.toUpperCase().indexOf('HOLD')>=0 ? 'HOLD' : 'NOTE',
       email:S.email, timestamp:_ts,
@@ -2803,28 +2803,45 @@ function renderHistoryList(data,q){
     var sess=data[i];
     var isNg=sess.ng>0;
 
-    // ── Parse ngày + giờ (UTC+7 Việt Nam) ──────────────────────
-    var datePart='', timePart='';
-    // Nguồn 1: sess.date "dd/MM/yyyy" từ GAS
-    if(sess.date && /^\d{2}\/\d{2}\/\d{4}$/.test((sess.date||'').trim()))
-      datePart=sess.date.trim();
-    // Nguồn 2: sess.time "HH:mm:ss" từ GAS
-    if(sess.time && /^\d{2}:\d{2}/.test((sess.time||'').trim()))
-      timePart=sess.time.trim().slice(0,5);
-    // Fallback: tính thủ công UTC+7 từ tsNum (không dùng Intl vì format không ổn định)
-    if((!datePart||!timePart) && sess.tsNum>0){
-      var _vn=new Date(sess.tsNum+7*3600*1000); // shift sang UTC+7
-      if(!datePart){
-        datePart=('0'+_vn.getUTCDate()).slice(-2)+'/'
-               +('0'+(_vn.getUTCMonth()+1)).slice(-2)+'/'
-               +_vn.getUTCFullYear();
-      }
-      if(!timePart){
-        timePart=('0'+_vn.getUTCHours()).slice(-2)+':'
-                +('0'+_vn.getUTCMinutes()).slice(-2);
+    var datePart = '', timePart = '';
+
+    function _fmtFromDateObj(d){
+      if(!d || isNaN(d.getTime())) return null;
+      return {
+        date: ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear(),
+        time: ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)
+      };
+    }
+
+    if(sess.date) datePart = String(sess.date).trim();
+    if(sess.time) timePart = String(sess.time).trim().slice(0,5);
+
+    if(datePart && datePart.indexOf(' ') > 0 && !timePart){
+      var parts = datePart.split(' ');
+      datePart = parts[0] || '';
+      timePart = (parts[1] || '').slice(0,5);
+    }
+
+    if(!/^\d{2}\/\d{2}\/\d{4}$/.test(datePart)) datePart = '';
+    if(!/^\d{2}:\d{2}/.test(timePart)) timePart = '';
+
+    if((!datePart || !timePart) && sess.timestamp){
+      var dt1 = _fmtFromDateObj(new Date(sess.timestamp));
+      if(dt1){
+        if(!datePart) datePart = dt1.date;
+        if(!timePart) timePart = dt1.time;
       }
     }
-    if(!datePart) datePart='—';
+
+    if((!datePart || !timePart) && sess.tsNum > 0){
+      var dt2 = _fmtFromDateObj(new Date(sess.tsNum));
+      if(dt2){
+        if(!datePart) datePart = dt2.date;
+        if(!timePart) timePart = dt2.time;
+      }
+    }
+
+    if(!datePart) datePart = '—';
 
     // SO: nếu nhiều SO thì show tags
     var rawSO=sess.soDisplay||sess.so||'';
