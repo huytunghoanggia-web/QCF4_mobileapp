@@ -2805,39 +2805,48 @@ function renderHistoryList(data,q){
 
     var datePart = '', timePart = '';
 
-    function _fmtFromDateObj(d){
-      if(!d || isNaN(d.getTime())) return null;
-      return {
-        date: ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear(),
-        time: ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)
-      };
-    }
+    function _padH(n){ return ('0'+n).slice(-2); }
 
-    if(sess.date) datePart = String(sess.date).trim();
-    if(sess.time) timePart = String(sess.time).trim().slice(0,5);
+    function _parseHistoryDate(v){
+      var s = String(v || '').trim();
+      if(!s) return '';
 
-    if(datePart && datePart.indexOf(' ') > 0 && !timePart){
-      var parts = datePart.split(' ');
-      datePart = parts[0] || '';
-      timePart = (parts[1] || '').slice(0,5);
-    }
+      var m = s.match(/^(\d{2}\/\d{2}\/\d{4})/);
+      if(m) return m[1];
 
-    if(!/^\d{2}\/\d{2}\/\d{4}$/.test(datePart)) datePart = '';
-    if(!/^\d{2}:\d{2}/.test(timePart)) timePart = '';
+      m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(m) return m[3] + '/' + m[2] + '/' + m[1];
 
-    if((!datePart || !timePart) && sess.timestamp){
-      var dt1 = _fmtFromDateObj(new Date(sess.timestamp));
-      if(dt1){
-        if(!datePart) datePart = dt1.date;
-        if(!timePart) timePart = dt1.time;
+      m = s.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{4})\b/i);
+      if(m){
+        var months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+        return _padH(parseInt(m[2],10)) + '/' + months[m[1].toLowerCase()] + '/' + m[3];
       }
+
+      return '';
     }
+
+    function _parseHistoryTime(v){
+      var s = String(v || '').trim();
+      if(!s) return '';
+
+      var m = s.match(/\b(\d{1,2}):(\d{2})(?::\d{2})?\b/);
+      if(m) return _padH(parseInt(m[1],10)) + ':' + m[2];
+
+      return '';
+    }
+
+    datePart = _parseHistoryDate(sess.date);
+    timePart = _parseHistoryTime(sess.time);
+
+    if(!datePart && sess.timestamp) datePart = _parseHistoryDate(sess.timestamp);
+    if(!timePart && sess.timestamp) timePart = _parseHistoryTime(sess.timestamp);
 
     if((!datePart || !timePart) && sess.tsNum > 0){
-      var dt2 = _fmtFromDateObj(new Date(sess.tsNum));
-      if(dt2){
-        if(!datePart) datePart = dt2.date;
-        if(!timePart) timePart = dt2.time;
+      var d = new Date(sess.tsNum);
+      if(!isNaN(d.getTime())){
+        if(!datePart) datePart = _padH(d.getDate()) + '/' + _padH(d.getMonth()+1) + '/' + d.getFullYear();
+        if(!timePart) timePart = _padH(d.getHours()) + ':' + _padH(d.getMinutes());
       }
     }
 
