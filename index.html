@@ -671,6 +671,126 @@ input[type=file]{display:none}
 .empty-ico{font-size:40px;margin-bottom:10px;display:block}
 ::-webkit-scrollbar{width:3px}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ── AUDIT MODAL ─────────────────────────────────────── */
+.audit-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:800;
+  display:none;flex-direction:column;
+}
+.audit-bg.on{display:flex}
+.audit-header{
+  background:#1a1035;color:#fff;
+  padding:10px 14px;
+  display:flex;align-items:center;gap:10px;
+  flex-shrink:0;
+  padding-top:max(10px, env(safe-area-inset-top,10px));
+}
+.audit-title-wrap{flex:1;min-width:0}
+.audit-title{font-size:14px;font-weight:800;letter-spacing:-.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audit-subtitle{font-size:10px;color:rgba(255,255,255,.6);margin-top:1px}
+.audit-nav{
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+}
+.audit-nav-btn{
+  width:32px;height:32px;border-radius:9px;border:1.5px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.1);color:#fff;font-size:16px;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  touch-action:manipulation;flex-shrink:0;
+}
+.audit-nav-btn:active{background:rgba(255,255,255,.25)}
+.audit-nav-btn:disabled{opacity:.3;pointer-events:none}
+.audit-page-info{
+  font-size:11px;font-family:var(--mono);color:rgba(255,255,255,.8);
+  white-space:nowrap;min-width:52px;text-align:center;font-weight:600;
+}
+.audit-close-btn{
+  width:32px;height:32px;border-radius:9px;border:none;
+  background:rgba(255,255,255,.12);color:#fff;font-size:13px;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  touch-action:manipulation;flex-shrink:0;
+}
+.audit-close-btn:active{opacity:.7}
+.audit-body{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  background:#f5f5f8;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  padding:12px;
+}
+.audit-loading{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:60px 16px;color:rgba(255,255,255,.7);font-size:13px;
+}
+.audit-spinner{
+  width:28px;height:28px;border:3px solid rgba(255,255,255,.2);
+  border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;
+}
+/* Card mỗi phiên kiểm (1 trang) */
+.audit-card{
+  background:#fff;border-radius:16px;
+  box-shadow:0 2px 12px rgba(0,0,0,.12);
+  overflow:hidden;margin-bottom:0;
+}
+.audit-card-header{
+  background:linear-gradient(135deg,#1a1035,#4630EB);
+  color:#fff;padding:12px 14px 10px;
+}
+.audit-card-so{font-size:13px;font-weight:800;letter-spacing:-.2px;margin-bottom:2px}
+.audit-card-meta{font-size:10px;color:rgba(255,255,255,.7);line-height:1.6}
+.audit-card-pills{
+  display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;
+}
+.audit-card-pill{
+  font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;
+  font-family:var(--mono);
+}
+.audit-card-pill.ok{background:rgba(22,163,74,.25);color:#86efac}
+.audit-card-pill.ng{background:rgba(239,68,68,.3);color:#fca5a5}
+.audit-card-pill.na{background:rgba(245,158,11,.2);color:#fde68a}
+.audit-card-pill.verdict-pass{background:#16a34a;color:#fff}
+.audit-card-pill.verdict-ng{background:#dc2626;color:#fff}
+.audit-card-body{padding:12px 14px}
+.audit-progress{
+  display:flex;gap:4px;margin-bottom:10px;flex-wrap:nowrap;overflow-x:auto;
+  scrollbar-width:none;padding-bottom:2px;
+}
+.audit-progress::-webkit-scrollbar{display:none}
+.audit-seg{
+  flex:1;min-width:18px;height:18px;border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:700;font-family:var(--mono);
+  border:1px solid transparent;
+}
+.audit-seg.ok{background:rgba(22,163,74,.15);border-color:rgba(22,163,74,.3);color:var(--ok)}
+.audit-seg.ng{background:rgba(220,38,38,.15);border-color:rgba(220,38,38,.3);color:var(--ng)}
+.audit-seg.na{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:var(--na)}
+.audit-seg.em{background:#f0f0f5;border-color:var(--border);color:var(--txt3)}
+/* Items table in audit card */
+.audit-items{width:100%;border-collapse:collapse;font-size:12px}
+.audit-items th{
+  font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;
+  letter-spacing:.4px;padding:4px 8px;border-bottom:1.5px solid var(--border);
+  text-align:left;background:#fafafa;
+}
+.audit-items td{padding:6px 8px;border-bottom:1px solid #f0f0f4;vertical-align:top;color:var(--txt)}
+.audit-items tr:last-child td{border-bottom:none}
+.audit-item-badge{
+  display:inline-block;padding:1px 6px;border-radius:4px;
+  font-size:10px;font-weight:800;white-space:nowrap;
+}
+.audit-item-badge.ok{background:#dcfce7;color:var(--ok)}
+.audit-item-badge.ng{background:#fee2e2;color:var(--ng)}
+.audit-item-badge.na{background:#fef9c3;color:var(--na)}
+.audit-item-badge.em{background:#f4f4f5;color:var(--txt3)}
+.audit-footer{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 14px;background:#fafafa;border-top:1px solid var(--border);
+  font-size:11px;color:var(--txt3);
+}
+.audit-swipe-hint{
+  text-align:center;padding:10px 0 2px;font-size:10px;
+  color:rgba(0,0,0,.35);letter-spacing:.3px;
+}
 </style>
 </head>
 <body>
@@ -1076,6 +1196,10 @@ input[type=file]{display:none}
           style="flex-shrink:0;background:var(--ac);border:none;color:#fff;border-radius:8px;
           padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);
           white-space:nowrap;touch-action:manipulation">🔍 Tất cả</button>
+        <button id="hAuditBtn" onclick="doAudit()"
+          style="flex-shrink:0;background:#1a1035;border:none;color:#fff;border-radius:8px;
+          padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);
+          white-space:nowrap;touch-action:manipulation">📋 Audit</button>
       </div>
       <div class="h-filters">
         <select class="h-sel" id="hProc" onchange="onFilterChange()"><option value="">Tất cả công đoạn</option></select>
@@ -1107,6 +1231,26 @@ input[type=file]{display:none}
   </button>
 </div>
 
+<!-- ══ AUDIT MODAL ══ -->
+<div class="audit-bg" id="auditBg">
+  <div class="audit-header">
+    <div class="audit-title-wrap">
+      <div class="audit-title" id="auditTitle">Audit</div>
+      <div class="audit-subtitle" id="auditSubtitle"></div>
+    </div>
+    <button class="audit-nav-btn" id="auditPrev" onclick="auditGoto(A.cur-1)" title="Trước">‹</button>
+    <span class="audit-page-info" id="auditPageInfo">0/0</span>
+    <button class="audit-nav-btn" id="auditNext" onclick="auditGoto(A.cur+1)" title="Sau">›</button>
+    <button class="audit-close-btn" onclick="closeAudit()" title="Đóng">✕</button>
+  </div>
+  <div class="audit-body" id="auditBody">
+    <div class="audit-loading">
+      <div class="audit-spinner"></div>
+      <span>Đang tải...</span>
+    </div>
+  </div>
+</div>
+
 </div><!-- /appShell -->
 
 <script>
@@ -1118,7 +1262,7 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbysmYMLALPTUgfqATKBpAsCRASJd22QRwNpE38ydqdYFKevZgTkTI5Ld2fMnE2lNvG68A/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwhPpf336HebgBaFNHF4hrVZGwHp_102w8UAuDV-Wyo2JGRIFfJTOQ4H_pc0resiU49rQ/exec';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -2308,7 +2452,7 @@ function doSave(){
     if(it.isRemark) return; // Remark_order xử lý riêng bên dưới
     if(!it.note||!it.note.trim()) return;
     paRows.push({
-      so:_so, itemCode:_ic, localCustomer:_lc,
+      so:_so, itemCode:'', localCustomer:'',
       remark:'['+esc2(it.itemcheck)+'] '+it.note.trim(),
       remarkType:'NOTE',
       email:S.email, timestamp:_ts,
@@ -2320,7 +2464,7 @@ function doSave(){
   S.items.forEach(function(it){
     if(!it.isRemark||!it.note||!it.note.trim()) return;
     paRows.push({
-      so:_so, itemCode:_ic, localCustomer:_lc,
+      so:_so, itemCode:'', localCustomer:'',
       remark:'[Remark đơn hàng] '+it.note.trim(),
       remarkType: it.note.toUpperCase().indexOf('HOLD')>=0 ? 'HOLD' : 'NOTE',
       email:S.email, timestamp:_ts,
@@ -2332,7 +2476,7 @@ function doSave(){
   var noteRemarkEl=document.getElementById('noteRemark');
   if(noteRemarkEl && noteRemarkEl.value.trim()){
     paRows.push({
-      so:_so, itemCode:_ic, localCustomer:_lc,
+      so:_so, itemCode:'', localCustomer:'',
       remark:'[Ghi chú đơn hàng] '+noteRemarkEl.value.trim(),
       remarkType: noteRemarkEl.value.toUpperCase().indexOf('HOLD')>=0 ? 'HOLD' : 'NOTE',
       email:S.email, timestamp:_ts,
@@ -3419,6 +3563,215 @@ function _paUnblock(){
 }
 </script>
 <script>
+// ══════════════════════════════════════════════════════════════
+// AUDIT — xem liên tiếp tất cả checksheet của 1 SO
+// Cấu trúc: A.sessions = danh sách phiên kiểm, A.cur = index hiện tại
+// Mỗi phiên load items qua GAS loadItems khi cần (lazy)
+// ══════════════════════════════════════════════════════════════
+var A = { sessions:[], cur:0, soQuery:'' };
+
+function doAudit(){
+  var q = (document.getElementById('hSearch').value||'').trim();
+  if(!q){
+    showToast('⚠️ Nhập mã SO vào ô tìm kiếm rồi nhấn Audit','er',3000);
+    return;
+  }
+  // Lấy các session khớp với query hiện tại (đã được filter ở H._filtered)
+  var filtered = (H._filtered && H._filtered.length) ? H._filtered : H.all;
+  // Lọc thêm theo q — chỉ lấy session có SO chứa q
+  var qUp = q.toUpperCase();
+  var matched = filtered.filter(function(s){
+    return (s.so||'').toUpperCase().indexOf(qUp) >= 0
+      || (s.itemCode||'').toUpperCase().indexOf(qUp) >= 0
+      || (s.localCustomer||'').toUpperCase().indexOf(qUp) >= 0;
+  });
+  if(!matched.length){
+    showToast('⚠️ Không tìm thấy phiên kiểm nào cho "'+q+'"','er',3000);
+    return;
+  }
+  // Sort mới nhất lên đầu (đã sort rồi nhưng đảm bảo)
+  matched = matched.slice().sort(function(a,b){ return (b.tsNum||0)-(a.tsNum||0); });
+  A.sessions = matched;
+  A.soQuery  = q;
+  A.cur      = 0;
+  _openAudit();
+}
+
+function _openAudit(){
+  document.getElementById('auditBg').classList.add('on');
+  document.getElementById('auditTitle').textContent = 'Audit: '+esc(A.soQuery);
+  _auditRenderPage(A.cur);
+}
+
+function closeAudit(){
+  document.getElementById('auditBg').classList.remove('on');
+  // Scroll body về top để lần sau mở không bị lệch
+  var body = document.getElementById('auditBody');
+  if(body) body.scrollTop = 0;
+}
+
+function auditGoto(idx){
+  if(idx < 0 || idx >= A.sessions.length) return;
+  A.cur = idx;
+  _auditRenderPage(idx);
+  // Scroll về top khi chuyển trang
+  var body = document.getElementById('auditBody');
+  if(body) body.scrollTop = 0;
+}
+
+function _auditRenderPage(idx){
+  var total   = A.sessions.length;
+  var sess    = A.sessions[idx];
+  var prevBtn = document.getElementById('auditPrev');
+  var nextBtn = document.getElementById('auditNext');
+  var pageInfo= document.getElementById('auditPageInfo');
+  var subtitle= document.getElementById('auditSubtitle');
+
+  // Cập nhật nav
+  if(prevBtn) prevBtn.disabled = (idx <= 0);
+  if(nextBtn) nextBtn.disabled = (idx >= total-1);
+  if(pageInfo) pageInfo.textContent = (idx+1)+'/'+total;
+  if(subtitle) subtitle.textContent = total+' phiên kiểm';
+
+  // Nếu đã có items → render ngay
+  if(sess.items && sess.items.length){
+    _auditDrawCard(sess, idx, total);
+    return;
+  }
+
+  // Chưa có items → show loading rồi fetch
+  var body = document.getElementById('auditBody');
+  if(body) body.innerHTML = '<div class="audit-loading">'
+    +'<div class="audit-spinner"></div>'
+    +'<span style="color:var(--txt3)">Đang tải phiên '+(idx+1)+'/'+total+'...</span>'
+    +'</div>';
+
+  // Session local (_local) → items đã có trong RAM (vừa check xong)
+  if(sess._local && sess.items){
+    _auditDrawCard(sess, idx, total);
+    return;
+  }
+
+  // Cần fetch từ GAS
+  var capturedIdx = idx;
+  _gasCall('loadItems',
+    {params:{fileId:sess._dataFileId, startRow:sess._startRow, endRow:sess._endRow}},
+    function(r){
+      // Chỉ render nếu user chưa chuyển trang
+      if(A.cur !== capturedIdx) return;
+      sess.items = (r && r.ok && Array.isArray(r.items)) ? r.items : [];
+      _auditDrawCard(sess, capturedIdx, total);
+    },
+    function(err){
+      if(A.cur !== capturedIdx) return;
+      sess.items = [];
+      _auditDrawCard(sess, capturedIdx, total);
+      showToast('⚠️ Không tải được hạng mục: '+(err&&err.message||'lỗi mạng'),'er',3000);
+    }
+  );
+}
+
+function _auditDrawCard(sess, idx, total){
+  // Parse date/time giờ VN
+  var _dp='', _tp='';
+  if(sess.date && /^\d{2}\/\d{2}\/\d{4}$/.test((sess.date||'').trim())) _dp=sess.date.trim();
+  if(sess.time && /^\d{2}:\d{2}/.test((sess.time||'').trim()))           _tp=sess.time.trim().slice(0,5);
+  if((!_dp||!_tp) && sess.tsNum>0){
+    var _vn=new Date(sess.tsNum+7*3600*1000);
+    if(!_dp) _dp=('0'+_vn.getUTCDate()).slice(-2)+'/'+('0'+(_vn.getUTCMonth()+1)).slice(-2)+'/'+_vn.getUTCFullYear();
+    if(!_tp) _tp=('0'+_vn.getUTCHours()).slice(-2)+':'+('0'+_vn.getUTCMinutes()).slice(-2);
+  }
+  var timeStr = (_dp&&_tp)?_dp+' '+_tp:(_dp||_tp||'—');
+
+  var items = sess.items || [];
+  var okN=sess.ok||0, ngN=sess.ng||0, naN=sess.na||0;
+  var isNg = ngN > 0;
+
+  // Header card
+  var soLabel = (sess.soArr&&sess.soArr.length>1) ? sess.soArr.join(', ') : (sess.so||'');
+  var metaParts = [sess.localCustomer, sess.process,
+    sess.inspector?(sess.inspector.split('@')[0]):'', timeStr].filter(Boolean);
+
+  // Progress segments
+  var segs = items.map(function(it,i){
+    var r=it.result||'';
+    var cls = r==='OK'?'ok':r==='NG'?'ng':r==='NA'?'na':'em';
+    return '<div class="audit-seg '+cls+'" title="'+esc(it.itemcheck)+'">'+esc(String(i+1))+'</div>';
+  }).join('');
+
+  // Items table
+  var itemRows = items.map(function(it){
+    var r=it.result||'';
+    var bcls=r==='OK'?'ok':r==='NG'?'ng':r==='NA'?'na':'em';
+    var detail='';
+    if(it.value) detail+='<span style="color:var(--ac);font-size:11px;font-family:var(--mono)">📏 '+esc(it.value)+'</span>';
+    if(it.note)  detail+=(detail?'<br>':'')+'<span style="color:var(--txt2);font-size:11px">💬 '+esc(it.note)+'</span>';
+    return '<tr>'
+      +'<td style="font-size:12px;padding:6px 8px">'+esc(it.itemcheck)+'</td>'
+      +'<td style="padding:6px 8px;text-align:center"><span class="audit-item-badge '+bcls+'">'+esc(r||'—')+'</span></td>'
+      +'<td style="padding:6px 8px">'+(detail||'<span style="color:var(--txt3);font-size:11px">—</span>')+'</td>'
+      +'</tr>';
+  }).join('');
+
+  var html =
+    '<div class="audit-card">'+
+      '<div class="audit-card-header">'+
+        '<div class="audit-card-so">'+esc(soLabel)+(sess.itemCode?' <span style="font-weight:400;opacity:.7;font-size:11px">'+esc(sess.itemCode)+'</span>':'')+'</div>'+
+        '<div class="audit-card-meta">'+esc(metaParts.join(' · '))+'</div>'+
+        '<div class="audit-card-pills">'+
+          '<span class="audit-card-pill '+(isNg?'verdict-ng':'verdict-pass')+'">'+(isNg?'NG':'PASS')+'</span>'+
+          '<span class="audit-card-pill ok">'+okN+' OK</span>'+
+          (ngN>0?'<span class="audit-card-pill ng">'+ngN+' NG</span>':'')+
+          (naN>0?'<span class="audit-card-pill na">'+naN+' N/A</span>':'')+
+        '</div>'+
+      '</div>'+
+      '<div class="audit-card-body">'+
+        (segs?'<div class="audit-progress">'+segs+'</div>':'')+
+        (items.length?
+          '<table class="audit-items">'+
+            '<thead><tr>'+
+              '<th>Hạng mục</th>'+
+              '<th style="text-align:center;width:48px">KQ</th>'+
+              '<th>Value / Ghi chú</th>'+
+            '</tr></thead>'+
+            '<tbody>'+itemRows+'</tbody>'+
+          '</table>'
+          :'<div style="text-align:center;padding:20px;color:var(--txt3);font-size:13px">Không có dữ liệu hạng mục</div>'
+        )+
+      '</div>'+
+      '<div class="audit-footer">'+
+        '<span>Phiên '+(idx+1)+' / '+total+'</span>'+
+        '<span style="font-family:var(--mono)">'+esc(timeStr)+'</span>'+
+      '</div>'+
+    '</div>'+
+    '<div class="audit-swipe-hint">‹ vuốt hoặc dùng nút điều hướng ›</div>';
+
+  var body = document.getElementById('auditBody');
+  if(body) body.innerHTML = html;
+}
+
+// Swipe gesture trên auditBody
+(function(){
+  var _tx=0,_ty=0,_sw=false;
+  var bd=document.getElementById('auditBg');
+  if(!bd) return;
+  bd.addEventListener('touchstart',function(e){
+    if(!document.getElementById('auditBg').classList.contains('on'))return;
+    _tx=e.touches[0].clientX;_ty=e.touches[0].clientY;_sw=true;
+  },{passive:true});
+  bd.addEventListener('touchend',function(e){
+    if(!_sw)return; _sw=false;
+    if(!document.getElementById('auditBg').classList.contains('on'))return;
+    var dx=e.changedTouches[0].clientX-_tx;
+    var dy=Math.abs(e.changedTouches[0].clientY-_ty);
+    // Horizontal swipe > 50px và ít vertical
+    if(Math.abs(dx)>50 && dy<80){
+      if(dx<0) auditGoto(A.cur+1); // swipe left → next
+      else     auditGoto(A.cur-1); // swipe right → prev
+    }
+  },{passive:true});
+})();
+
 // ── Service Worker Registration ──────────────────────────────
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
