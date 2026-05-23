@@ -1994,14 +1994,23 @@ function _isDecimalValueItem(name){
          n.indexOf('delta_e')>=0 || n.indexOf('deltae')>=0 ||
          n.indexOf('moisure')>=0 || n.indexOf('moisture')>=0;
 }
-function _cleanDecimalInput(v){
-  var s=String(v||'').replace(/,/g,'.').replace(/[^0-9.]/g,'');
-  var p=s.split('.');
-  if(p.length>1) s=(p[0]||'0')+'.'+p.slice(1).join('').replace(/\D/g,'');
-  return s;
-}
+function _cleanDecimalInput(v){return String(v||'').trim();}
 function _isValidDecimalInput(v){return /^\d+(?:\.\d+)?$/.test(String(v||'').trim());}
-function _decimalInputAttr(){return ' inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"';}
+function _decimalInputAttr(){return ' inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)"';}
+function decimalBeforeInput(e,el){
+  if(e.inputType&&e.inputType.indexOf('delete')===0) return true;
+  var d=e.data; if(d==null) return true;
+  if(!/^[0-9.]$/.test(d)) return false;
+  var v=String(el.value||''), st=el.selectionStart||0, en=el.selectionEnd||0;
+  var next=v.slice(0,st)+d+v.slice(en);
+  return /^\d+(?:\.\d*)?$/.test(next);
+}
+function decimalPaste(e,el){
+  var t=(e.clipboardData||window.clipboardData).getData('text')||'';
+  var v=String(el.value||''), st=el.selectionStart||0, en=el.selectionEnd||0;
+  var next=v.slice(0,st)+t+v.slice(en);
+  return /^\d+(?:\.\d+)?$/.test(next);
+}
 function _setDecimalFieldError(el,on){if(el)el.style.borderColor=on?'var(--ng)':'';}
 function _validateDecimalValuesBeforeSave(){
   for(var i=0;i<S.items.length;i++){
@@ -2103,7 +2112,7 @@ function buildDeltaHTML(item,i){
           +'<button class="cx'+(row.value?' on':'')+'" onclick="deToggleVal('+i+','+j+')">📏 Value</button>'
         +'</div>'
         +'<div class="de-cx'+(row.value?' on':'')+'" id="decx_'+i+'_'+j+'">'
-          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
+          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
           +' oninput="deCustom('+i+','+j+',this.value,this)"></div>'
         +'<div class="de-note"><input type="text" placeholder="Ghi chú..." value="'+esc(row.note)+'"'
           +' oninput="S.items['+i+'].dRows['+j+'].note=this.value"></div>'
@@ -2183,7 +2192,7 @@ function buildDimHTML(item,i){
           +'<button class="cx'+(row.value?' on':'')+'" onclick="dimToggleVal('+i+','+j+')">📏 Value</button>'
         +'</div>'
         +'<div class="de-cx'+(row.value?' on':'')+'" id="dimcx_'+i+'_'+j+'">'
-          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
+          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
           +' oninput="dimCustom('+i+','+j+',this.value,this)"></div>'
         +'<div class="de-note"><input type="text" placeholder="Ghi chú..." value="'+esc(row.note)+'"'
           +' oninput="S.items['+i+'].dimRows['+j+'].note=this.value"></div>'
@@ -3867,4 +3876,6 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
+
+
 
