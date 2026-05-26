@@ -135,7 +135,7 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
 #appShell.on{display:flex}
 
 /* TOPBAR */
-.tb{background:#4630EB;height:56px;display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(70,48,235,.25)}
+.tb{background:#4630EB;height:calc(56px + env(safe-area-inset-top,0px));display:flex;align-items:center;padding:env(safe-area-inset-top,0px) 16px 0;gap:10px;flex-shrink:0;box-shadow:0 2px 12px rgba(70,48,235,.25)}
 .logo{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-.5px}
 .tb-name{font-size:16px;font-weight:800;color:#fff;letter-spacing:-.4px}
 .tb-ver{font-size:9px;color:rgba(255,255,255,.55);font-family:var(--mono)}
@@ -161,7 +161,7 @@ body{background:#ffffff;color:var(--txt);font-family:var(--font);display:flex;fl
 
 /* Logout dropdown */
 .logout-dd{
-  position:fixed;top:60px;right:12px;z-index:500;
+  position:fixed;top:calc(60px + env(safe-area-inset-top,0px));right:12px;z-index:500;
   background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.2);
   border:1px solid var(--border);min-width:180px;
   display:none;animation:fadeIn .15s ease;
@@ -647,7 +647,7 @@ input[type=file]{display:none}
 .toast.ok{background:#16a34a}
 .toast.er{background:#dc2626}
 /* Notification banner — dùng cho ghi chú mới & nhắc HOLD */
-.notif-stack{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:800;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:calc(100% - 24px);max-width:460px}
+.notif-stack{position:fixed;top:calc(60px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:800;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:calc(100% - 24px);max-width:460px}
 .notif{
   width:100%;background:#1e1e2e;color:#fff;border-radius:14px;
   padding:11px 14px;box-shadow:0 6px 24px rgba(0,0,0,.3);
@@ -1258,7 +1258,8 @@ input[type=file]{display:none}
 // CẤU HÌNH — Điền GAS Web App URL tại đây
 // Lấy từ: GAS → Deploy → Manage deployments → Copy URL
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbysmYMLALPTUgfqATKBpAsCRASJd22QRwNpE38ydqdYFKevZgTkTI5Ld2fMnE2lNvG68A/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbysmYMLALPTUgfqATKBpAsCRASJd22QRwNpE38ydqdYFKevZgTkTI5Ld2fMnE2lNvG68A/exec
+';
 
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
@@ -1277,14 +1278,18 @@ var LKEY = 'ipqc_login';  // localStorage key lưu login session
 // GAS_URL đã được cấu hình ở trên
 
 function _gasCall(action, body, ok, err) {
-  if(!GAS_URL){ if(err)err(new Error('GAS_URL chưa được cấu hình')); return; }
+  if(!GAS_URL){ if(err)err(new Error('GAS_URL chua duoc cau hinh')); return; }
   var payload = Object.assign({action: action}, body||{});
+  var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timeoutId = controller ? setTimeout(function(){ controller.abort(); }, 90000) : null;
   fetch(GAS_URL, {
     method: 'POST',
     headers: {'Content-Type':'text/plain'},
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal: controller ? controller.signal : undefined
   })
   .then(function(r){
+    if(timeoutId) clearTimeout(timeoutId);
     if(!r.ok) throw new Error('HTTP '+r.status+' '+r.statusText);
     return r.json();
   })
@@ -1295,9 +1300,11 @@ function _gasCall(action, body, ok, err) {
     if(ok) ok(data);
   })
   .catch(function(e){
-    console.error('[GAS]['+action+'] failed:', e.message||e);
-    if(err) err(e);
-    else showToast('❌ ['+action+'] '+( e.message||'Lỗi kết nối'),'er',5000);
+    if(timeoutId) clearTimeout(timeoutId);
+    var msg = (e && e.name === 'AbortError') ? 'Request timeout sau 90 giay' : (e.message||e);
+    console.error('[GAS]['+action+'] failed:', msg);
+    if(err) err(new Error(msg));
+    else showToast('Loi ['+action+'] '+(msg||'ket noi'),'er',5000);
   });
 }
 
@@ -1768,21 +1775,31 @@ function updateQueueUI(){
 }
 function tryAutoSync(){if(S.online&&S.queue.length>0)_bgSyncQueue();}
 function doSync(){
-  // Reset nếu bị kẹt
+  // Manual sync: reset trang thai ket va thu lai ca cac phien tung loi.
   if(_syncInProgress){
     _setSyncInProgress(false);
     console.log('[Sync] Manual reset _syncInProgress');
   }
   if(!S.online||!S.queue.length)return;
-  if(_syncInProgress){showToast('⏳ Đang sync...','',2000);return;}
+  S.queue.forEach(function(p){ delete p._syncError; delete p._lastSyncErrorAt; });
+  saveQueue();
   var total=S.queue.length;
-  showOverlay('Đang đồng bộ '+total+' phiên...','Gửi từng phiên riêng lẻ...');
+  showOverlay('Dang dong bo '+total+' phien...','Neu 1 phien loi, app se giu lai va tiep tuc phien sau.');
   _setSyncInProgress(true);
-  _syncOneByOne(S.queue.slice(), 0, 0, function(savedCount){
-    _syncInProgress=false;
+  _syncOneByOne(S.queue.slice(), 0, 0, function(savedCount, failedCount, errors){
+    _setSyncInProgress(false);
     hideOverlay();
     H.lastQ='';
-    showToast('✅ Đồng bộ '+savedCount+' dòng ('+total+' phiên)','ok',3000);
+    updateQueueUI();
+    if(failedCount>0){
+      var firstErr = errors && errors.length ? errors[0].error : 'Khong ro loi';
+      var msg = savedCount>0
+        ? ('Da sync '+savedCount+' dong. Con '+S.queue.length+' phien chua sync. Loi dau: '+firstErr)
+        : ('Chua sync duoc. '+failedCount+' phien loi/chua gui. Loi dau: '+firstErr);
+      showToast(msg,'er',8000);
+    } else {
+      showToast('Da dong bo '+savedCount+' dong ('+total+' phien)','ok',4000);
+    }
     _bgRefreshHistory();
   });
 }
@@ -2551,18 +2568,21 @@ function doSave(){
 }
 
 function _bgSyncQueue(){
-  // Gửi TỪNG payload một, không batch — tránh GAS gộp nhiều phiên thành 1 record
+  // Auto sync chi thu cac phien chua co loi. Phien loi duoc giu lai de QC/QA xu ly sau.
   if(!S.online||!S.queue.length)return;
-  if(_syncInProgress)return; // chống double-fire
-  // Lọc bỏ payload đã được đánh dấu _synced (tránh gửi lại khi mạng chập chờn)
-  var pending = S.queue.filter(function(p){ return !p._synced; });
-  if(!pending.length){ S.queue=[]; saveQueue(); return; }
+  if(_syncInProgress)return;
+  var pending = S.queue.filter(function(p){ return !p._synced && !p._syncError; });
+  if(!pending.length){ saveQueue(); return; }
   _setSyncInProgress(true);
-  _syncOneByOne(pending.slice(), 0, 0, function(totalSaved){
+  _syncOneByOne(pending.slice(), 0, 0, function(totalSaved, failedCount){
     _setSyncInProgress(false);
+    updateQueueUI();
     if(totalSaved>0){
-      showToast('✅ Đã lưu '+totalSaved+' dòng vào Sheet','ok',2500);
+      showToast('Da luu '+totalSaved+' dong vao Sheet','ok',2500);
       _bgRefreshHistory();
+    }
+    if(failedCount>0){
+      showToast('Con '+S.queue.length+' phien chua sync. Bam Sync de xem loi dau tien.','er',5000);
     }
   });
 }
@@ -2582,36 +2602,40 @@ function _setSyncInProgress(val){
     },60000);
   }
 }
-function _syncOneByOne(queue, idx, savedCount, done){
-  if(idx>=queue.length){ done(savedCount); return; }
+function _syncOneByOne(queue, idx, savedCount, done, errors){
+  errors = errors || [];
+  if(idx>=queue.length){ done(savedCount, errors.length, errors); return; }
   var payload=queue[idx];
   gasSaveResults([payload],
     function(r){
       if(r&&r.ok){
-        // Đánh dấu payload đã sync — ngăn gửi lại nếu còn trong queue
         payload._synced = true;
-        // Xóa payload đã sync khỏi queue thực
         var qi=S.queue.indexOf(payload);
         if(qi>=0){
           if(payload.results)payload.results.forEach(function(it){it.photoBase64='';});
           S.queue.splice(qi,1);
           saveQueue();
         }
-        _syncOneByOne(queue, idx+1, savedCount+(r.saved||0), done);
+        _syncOneByOne(queue, idx+1, savedCount+(r.saved||0), done, errors);
       } else {
-        // Lỗi 1 payload → dừng, giữ lại trong queue, thử lại sau
-        _syncInProgress=false;
-        console.warn('[Sync] payload',idx,'failed:',r&&r.error);
-        if(savedCount>0) showToast('✅ Đã lưu '+savedCount+' dòng, còn '+(queue.length-idx)+' chờ sync','ok',3000);
+        var msg = (r&&r.error) ? String(r.error) : 'Backend tra ve loi khong ro';
+        payload._syncError = msg;
+        payload._lastSyncErrorAt = Date.now();
+        saveQueue();
+        errors.push({idx:idx, so:payload.so||'', process:payload.process||'', error:msg});
+        console.warn('[Sync] payload',idx,'failed:',msg);
+        _syncOneByOne(queue, idx+1, savedCount, done, errors);
       }
     },
-    function(){
-      _setSyncInProgress(false);
-      console.warn('[Sync] network error at payload',idx);
-      // Retry sau 10 giây nếu còn online
-      setTimeout(function(){
-        if(S.online && S.queue.length > 0) tryAutoSync();
-      }, 10000);
+    function(e){
+      var msg = (e&&e.message) ? e.message : 'Loi ket noi';
+      payload._syncError = msg;
+      payload._lastSyncErrorAt = Date.now();
+      saveQueue();
+      errors.push({idx:idx, so:payload.so||'', process:payload.process||'', error:msg});
+      console.warn('[Sync] network error at payload',idx,msg);
+      // Loi ket noi/timeout thuong anh huong toan bo, dung de tranh doi 55 lan timeout.
+      done(savedCount, errors.length, errors);
     }
   );
 }
