@@ -1279,16 +1279,12 @@ var LKEY = 'ipqc_login';  // localStorage key lưu login session
 function _gasCall(action, body, ok, err) {
   if(!GAS_URL){ if(err)err(new Error('GAS_URL chua duoc cau hinh')); return; }
   var payload = Object.assign({action: action}, body||{});
-  var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  var timeoutId = controller ? setTimeout(function(){ controller.abort(); }, 90000) : null;
   fetch(GAS_URL, {
     method: 'POST',
     headers: {'Content-Type':'text/plain'},
-    body: JSON.stringify(payload),
-    signal: controller ? controller.signal : undefined
+    body: JSON.stringify(payload)
   })
   .then(function(r){
-    if(timeoutId) clearTimeout(timeoutId);
     if(!r.ok) throw new Error('HTTP '+r.status+' '+r.statusText);
     return r.json();
   })
@@ -1299,17 +1295,35 @@ function _gasCall(action, body, ok, err) {
     if(ok) ok(data);
   })
   .catch(function(e){
-    if(timeoutId) clearTimeout(timeoutId);
-    var msg = (e && e.name === 'AbortError') ? 'Request timeout sau 90 giay' : (e.message||e);
-    console.error('[GAS]['+action+'] failed:', msg);
-    if(err) err(new Error(msg));
-    else showToast('Loi ['+action+'] '+(msg||'ket noi'),'er',5000);
+    console.error('[GAS]['+action+'] failed:', e.message||e);
+    if(err) err(e);
+    else showToast('Loi ['+action+'] '+( e.message||'ket noi'),'er',5000);
+  });
+}
+
+function _gasCallSaveResults(payloads, ok, err) {
+  var finished = false;
+  var timeoutId = setTimeout(function(){
+    if(finished) return;
+    finished = true;
+    if(err) err(new Error('Request timeout sau 90 giay'));
+  }, 90000);
+  _gasCall('saveResults', {payloads:payloads}, function(r){
+    if(finished) return;
+    finished = true;
+    clearTimeout(timeoutId);
+    if(ok) ok(r);
+  }, function(e){
+    if(finished) return;
+    finished = true;
+    clearTimeout(timeoutId);
+    if(err) err(e);
   });
 }
 
 function gasDoLogin(pwd,ok,err)  { _gasCall('login',{password:pwd},ok,err); }
 function gasGetAppData(ok,err)   { _gasCall('getAppData',{},ok,err); }
-function gasSaveResults(p,ok,err){ _gasCall('saveResults',{payloads:p},ok,err); }
+function gasSaveResults(p,ok,err){ _gasCallSaveResults(p,ok,err); }
 function gasGetHistory(p,ok,err) { _gasCall('getHistory',{params:p},ok,err); }
 function gasSearchAll(p,ok,err)  { _gasCall('searchAllHistory',{params:p},ok,err); }
 function gasCheckDup(so,pr,ok)   { _gasCall('checkDup',{so:so,process:pr},ok,function(){}); }
@@ -1740,17 +1754,25 @@ function _hidePWABanners(){
   if(h) h.style.display='none';
 }
 
+var AUTO_SYNC_INTERVAL_MS = 30000;
+var AUTO_SYNC_RETRY_MS = 60000;
+var AUTO_SYNC_ERROR_RETRY_MS = 180000;
+var _autoSyncTimer = null;
+
 function watchNetwork(){
-  window.addEventListener('online', function(){S.online=true;updateNetUI();tryAutoSync();},{passive:true});
+  window.addEventListener('online', function(){
+    S.online=true;
+    updateNetUI();
+    _scheduleAutoSync(1000, true);
+  },{passive:true});
   window.addEventListener('offline',function(){S.online=false;updateNetUI();},{passive:true});
-  // Periodic sync: mỗi 30s kiểm tra nếu còn queue chưa sync
-  setInterval(function(){
-    if(S.online && S.queue.length>0 && !_syncInProgress){
-      console.log('[Sync] Periodic check: '+S.queue.length+' items pending');
-      tryAutoSync();
-    }
-  }, 30000);
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden) _scheduleAutoSync(1200, false);
+  },{passive:true});
+  window.addEventListener('focus',function(){_scheduleAutoSync(1200, false);},{passive:true});
+  setInterval(function(){_scheduleAutoSync(0, false);}, AUTO_SYNC_INTERVAL_MS);
   updateNetUI();
+  _scheduleAutoSync(1800, false);
 }
 function updateNetUI(){
   document.getElementById('chipOff').classList.toggle('on',!S.online);
@@ -1761,7 +1783,11 @@ function updateNetUI(){
   // Nút refresh luôn hiển thị
 }
 function loadQueue(){try{S.queue=JSON.parse(localStorage.getItem(QKEY)||'[]');}catch(e){S.queue=[];}updateQueueUI();}
-function saveQueue(){try{localStorage.setItem(QKEY,JSON.stringify(S.queue));}catch(e){}updateQueueUI();}
+function saveQueue(){
+  try{localStorage.setItem(QKEY,JSON.stringify(S.queue));}catch(e){}
+  updateQueueUI();
+  if(S.online && S.queue.length>0 && !_syncInProgress) _scheduleAutoSync(1500, false);
+}
 function updateQueueUI(){
   var n=S.queue.length;
   document.getElementById('syncN').textContent=n;
@@ -1772,7 +1798,15 @@ function updateQueueUI(){
   if(oc)oc.textContent=n>0?(n+' phiên chờ sync'):'';
   var b=document.getElementById('nbBadge');b.style.display=n>0?'block':'none';b.textContent=n;
 }
-function tryAutoSync(){if(S.online&&S.queue.length>0)_bgSyncQueue();}
+function _scheduleAutoSync(delayMs, forceRetry){
+  if(!S.online || !S.queue.length) return;
+  if(_autoSyncTimer){clearTimeout(_autoSyncTimer);_autoSyncTimer=null;}
+  _autoSyncTimer=setTimeout(function(){
+    _autoSyncTimer=null;
+    tryAutoSync(!!forceRetry);
+  }, Math.max(0, delayMs||0));
+}
+function tryAutoSync(forceRetry){if(S.online&&S.queue.length>0)_bgSyncQueue(!!forceRetry);}
 function doSync(){
   // Manual sync: reset trang thai ket va thu lai ca cac phien tung loi.
   if(_syncInProgress){
@@ -2566,12 +2600,30 @@ function doSave(){
   if(paRows.length)_gasCall('savePayAttention',{rows:paRows},null,function(){});
 }
 
-function _bgSyncQueue(){
-  // Auto sync chi thu cac phien chua co loi. Phien loi duoc giu lai de QC/QA xu ly sau.
+function _isRetryableSyncError(msg){
+  msg=String(msg||'').toLowerCase();
+  return msg.indexOf('failed to fetch')>=0 || msg.indexOf('network')>=0 ||
+         msg.indexOf('timeout')>=0 || msg.indexOf('ket noi')>=0 ||
+         msg.indexOf('kết nối')>=0 || msg.indexOf('server dang ban')>=0 ||
+         msg.indexOf('server đang bận')>=0;
+}
+function _bgSyncQueue(forceRetry){
+  // Auto sync chạy nền: không overlay, không khóa form, chỉ xử lý S.queue.
   if(!S.online||!S.queue.length)return;
   if(_syncInProgress)return;
-  var pending = S.queue.filter(function(p){ return !p._synced && !p._syncError; });
-  if(!pending.length){ saveQueue(); return; }
+  var now=Date.now();
+  var pending = S.queue.filter(function(p){
+    if(!p || p._synced) return false;
+    if(!p._syncError) return true;
+    if(forceRetry && _isRetryableSyncError(p._syncError)) return true;
+    if(!_isRetryableSyncError(p._syncError)) return false;
+    return now - (p._lastSyncErrorAt||0) >= AUTO_SYNC_ERROR_RETRY_MS;
+  });
+  if(!pending.length){ return; }
+  pending.forEach(function(p){
+    if(_isRetryableSyncError(p._syncError)){ delete p._syncError; }
+  });
+  saveQueue();
   _setSyncInProgress(true);
   _syncOneByOne(pending.slice(), 0, 0, function(totalSaved, failedCount){
     _setSyncInProgress(false);
@@ -2580,8 +2632,8 @@ function _bgSyncQueue(){
       showToast('Da luu '+totalSaved+' dong vao Sheet','ok',2500);
       _bgRefreshHistory();
     }
-    if(failedCount>0){
-      showToast('Con '+S.queue.length+' phien chua sync. Bam Sync de xem loi dau tien.','er',5000);
+    if(S.queue.length>0){
+      _scheduleAutoSync(failedCount>0 ? AUTO_SYNC_RETRY_MS : AUTO_SYNC_INTERVAL_MS, false);
     }
   });
 }
