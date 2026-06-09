@@ -577,7 +577,7 @@ input[type=file]{display:none}
 .h-td-time{white-space:nowrap;font-family:var(--mono);font-size:12px;color:var(--txt);min-width:82px;font-weight:600}
 .h-td-time .h-time{font-size:13px;font-weight:700;color:var(--txt);display:block}
 .h-td-time .h-date{font-size:10px;color:var(--txt3)}
-.h-td-proc .h-proc-badge{display:inline-block;background:#eff6ff;color:var(--ac);border:1px solid #bfdbfe;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}
+.h-td-proc .h-proc-badge{display:inline-block;background:#eff6ff;color:var(--ac);border:1px solid #bfdbfe;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}.h-machine{display:block;margin-top:4px;font-size:10px;line-height:1.25;color:var(--txt3);font-family:var(--mono);white-space:nowrap}
 .h-td-so{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--txt);min-width:90px}
 .h-td-so .h-so-tags{display:flex;flex-wrap:wrap;gap:2px;margin-top:2px}
 .h-td-so .h-so-tag{font-size:10px;background:#eef2ff;color:var(--ac);border:1px solid #c7d2fe;border-radius:4px;padding:1px 5px;font-weight:600}
@@ -3006,6 +3006,8 @@ function renderHistoryList(data,q){
 
     // Người kiểm tra: chỉ lấy phần trước @
     var insp=sess.inspector?sess.inspector.split('@')[0]:'-';
+    var machine=sess.machine?String(sess.machine).trim():'';
+    var procCell='<span class="h-proc-badge">'+esc(sess.process||'-')+'</span>'+(machine?'<span class="h-machine">Máy: '+esc(machine)+'</span>':'');
 
     // Kết quả pills
     var pills='<span class="h-verdict '+(isNg?'fail':'pass')+'">'+(isNg?'NG':'PASS')+'</span>'
@@ -3017,7 +3019,7 @@ function renderHistoryList(data,q){
 
     rows.push('<tr class="'+(isNg?'row-ng':'row-pass')+'" data-idx="'+i+'">'
       +'<td class="h-td-time"><span class="h-time">'+esc(datePart)+'</span>'+(timePart?'<span class="h-date">'+esc(timePart)+'</span>':'')+'</td>'
-      +'<td class="h-td-proc"><span class="h-proc-badge">'+esc(sess.process||'-')+'</span></td>'
+      +'<td class="h-td-proc">'+procCell+'</td>'
       +'<td class="h-td-so">'+soCell+'</td>'
       +'<td class="h-td-ic">'+icCell+'</td>'
       +'<td class="h-td-lc">'+esc(sess.localCustomer||'-')+'</td>'
@@ -3951,6 +3953,4 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
-
-
 
