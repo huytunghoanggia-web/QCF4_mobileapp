@@ -792,16 +792,16 @@ input[type=file]{display:none}
   color:rgba(0,0,0,.35);letter-spacing:.3px;
 }
 
-/* HISTORY DATE RANGE FILTER */
-.h-range{display:flex;gap:5px;overflow-x:auto;padding-bottom:5px;margin-bottom:7px;scrollbar-width:none}
+/* HISTORY DATE RANGE FILTER v3 */
+.h-range{display:flex;gap:5px;overflow-x:auto;padding-bottom:5px;margin-bottom:7px;scrollbar-width:none;position:relative;z-index:5}
 .h-range::-webkit-scrollbar{display:none}
-.h-range-btn{flex:0 0 auto;background:#fff;border:1.5px solid #D0D0DC;border-radius:20px;color:var(--txt2);font-family:var(--font);font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;touch-action:manipulation;white-space:nowrap}
+.h-range-btn{flex:0 0 auto;background:#fff;border:1.5px solid #D0D0DC;border-radius:20px;color:var(--txt2);font-family:var(--font);font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;touch-action:manipulation;white-space:nowrap;min-height:30px;position:relative;z-index:6}
 .h-range-btn.on{background:#eef2ff;border-color:#a5b4fc;color:var(--ac)}
-.h-range-custom{display:none;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;margin-bottom:8px;background:#f8f8ff;border:1px solid #e0e7ff;border-radius:12px;padding:8px}
+.h-range-custom{display:none;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;margin-bottom:8px;background:#f8f8ff;border:1px solid #e0e7ff;border-radius:12px;padding:8px;position:relative;z-index:5}
 .h-range-custom.on{display:grid}
 .h-range-field label{font-size:10px;margin-bottom:3px;color:var(--txt3);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
 .h-range-field input{font-size:12px;padding:8px 9px;border-radius:9px;background:#fff}
-.h-range-apply{background:var(--ac);border:none;color:#fff;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:800;font-family:var(--font);cursor:pointer;touch-action:manipulation;white-space:nowrap}
+.h-range-apply{background:var(--ac);border:none;color:#fff;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:800;font-family:var(--font);cursor:pointer;touch-action:manipulation;white-space:nowrap;min-height:36px}
 .h-range-status{display:none;font-size:10px;color:var(--ac);font-family:var(--mono);font-weight:700;margin:-2px 0 7px;padding:4px 8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px}
 .h-range-status.on{display:block}
 
@@ -1211,18 +1211,19 @@ input[type=file]{display:none}
           padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);
           white-space:nowrap;touch-action:manipulation">🔍 Tất cả</button>
       </div>
+
       <div class="h-range" id="hRangeBar">
-        <button class="h-range-btn on" data-range="recent" onclick="setHistoryQuickRange('recent')">Gần đây</button>
-        <button class="h-range-btn" data-range="today" onclick="setHistoryQuickRange('today')">Hôm nay</button>
-        <button class="h-range-btn" data-range="7d" onclick="setHistoryQuickRange('7d')">7 ngày</button>
-        <button class="h-range-btn" data-range="30d" onclick="setHistoryQuickRange('30d')">30 ngày</button>
-        <button class="h-range-btn" data-range="month" onclick="setHistoryQuickRange('month')">Tháng này</button>
-        <button class="h-range-btn" data-range="custom" onclick="setHistoryQuickRange('custom')">Tùy chọn</button>
+        <button type="button" class="h-range-btn on" data-range="recent">Gần đây</button>
+        <button type="button" class="h-range-btn" data-range="today">Hôm nay</button>
+        <button type="button" class="h-range-btn" data-range="7d">7 ngày</button>
+        <button type="button" class="h-range-btn" data-range="30d">30 ngày</button>
+        <button type="button" class="h-range-btn" data-range="month">Tháng này</button>
+        <button type="button" class="h-range-btn" data-range="custom">Tùy chọn</button>
       </div>
       <div class="h-range-custom" id="hRangeCustom">
         <div class="h-range-field"><label>Từ ngày</label><input type="date" id="hDateFrom"></div>
         <div class="h-range-field"><label>Đến ngày</label><input type="date" id="hDateTo"></div>
-        <button class="h-range-apply" onclick="applyHistoryDateRange()">Tìm</button>
+        <button type="button" class="h-range-apply" id="hRangeApply">Tìm</button>
       </div>
       <div class="h-range-status" id="hRangeStatus"></div>
       <div class="h-filters">
@@ -2809,52 +2810,74 @@ function _setHistoryRangeUI(mode){
     else{st.textContent='';st.classList.remove('on');}
   }
 }
-function setHistoryQuickRange(mode){
-  var now=new Date(),from=new Date(now.getFullYear(),now.getMonth(),now.getDate()),to=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-  if(mode==='recent'){
-    H.rangeMode='recent';H.dateFrom='';H.dateTo='';_setHistoryRangeUI('recent');
-    H.allLoaded=false;H.all=[];H._filtered=[];_openHistory();
-    return;
-  }
-  if(mode==='custom'){
-    H.rangeMode='custom';
-    if(!H.dateFrom||!H.dateTo){H.dateFrom=_hIsoDate(new Date(now.getFullYear(),now.getMonth(),1));H.dateTo=_hIsoDate(to);}
-    var df=document.getElementById('hDateFrom'),dt=document.getElementById('hDateTo');if(df)df.value=H.dateFrom;if(dt)dt.value=H.dateTo;
-    _setHistoryRangeUI('custom');return;
-  }
-  if(mode==='7d'){from.setDate(to.getDate()-6);}
-  else if(mode==='30d'){from.setDate(to.getDate()-29);}
-  else if(mode==='month'){from=new Date(now.getFullYear(),now.getMonth(),1);}
-  else if(mode==='today'){}
-  H.rangeMode=mode;H.dateFrom=_hIsoDate(from);H.dateTo=_hIsoDate(to);_setHistoryRangeUI(mode);applyHistoryDateRange();
-}
-function applyHistoryDateRange(){
-  if(H.rangeMode==='custom'){
-    H.dateFrom=(document.getElementById('hDateFrom').value||'').trim();
-    H.dateTo=(document.getElementById('hDateTo').value||'').trim();
-  }
+function _loadHistoryRangeFromServer(){
   if(!H.dateFrom||!H.dateTo){showToast('Chọn đủ Từ ngày / Đến ngày','er',2500);return;}
   var fm=_hIsoStartMs(H.dateFrom),tm=_hIsoEndMs(H.dateTo);
   if(!fm||!tm){showToast('Ngày không hợp lệ','er',2500);return;}
   if(fm>tm){showToast('Từ ngày không được lớn hơn Đến ngày','er',3000);return;}
   if(!S.online){
-    if(H.all&&H.all.length){_setHistoryRangeUI(H.rangeMode);applyClientFilter();showToast('📴 Đang lọc trên dữ liệu cache hiện có','',3000);}else showToast('📴 Cần mạng để tìm theo khoảng ngày','er',3000);
+    if(H.all&&H.all.length){applyClientFilter();showToast('📴 Đang lọc trên dữ liệu cache hiện có','',3000);}else showToast('📴 Cần mạng để tìm theo khoảng ngày','er',3000);
     return;
   }
   var f=getHFilter();f.dateFrom=H.dateFrom;f.dateTo=H.dateTo;
   var reqId=++_hReqId;showHLoading();_setHistoryRangeUI(H.rangeMode);
   gasGetHistoryRange({filter:f,needInspList:true,maxSessions:500},function(r){
     if(reqId!==_hReqId)return;hideHLoading();
-    if(!r||!r.ok){showToast('⚠️ '+((r&&r.error)||'Lỗi tải lịch sử theo ngày'),'er',4000);return;}
+    if(!r||!r.ok){showToast('⚠️ '+((r&&r.error)||'Lỗi tải lịch sử theo ngày'),'er',4500);return;}
     H.all=r.data||[];H.allLoaded=true;H.pageSize=60;
     if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
     applyClientFilter();
     showToast('✅ Tìm thấy '+(r.total||0)+' phiên ('+(r.monthsScanned||0)+' tháng)','ok',3500);
-  },function(){hideHLoading();showToast('⚠️ Lỗi kết nối','er');});
+  },function(){hideHLoading();showToast('⚠️ Lỗi kết nối getHistoryRange','er',4000);});
 }
+function setHistoryQuickRange(mode,ev){
+  if(ev&&ev.preventDefault)ev.preventDefault();
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  mode=mode||'recent';
+  var now=new Date();
+  var to=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  var from=new Date(to.getTime());
+  if(mode==='recent'){
+    H.rangeMode='recent';H.dateFrom='';H.dateTo='';H.allLoaded=false;H.all=[];H._filtered=[];
+    _setHistoryRangeUI('recent');_serverLoad(1);return false;
+  }
+  if(mode==='custom'){
+    H.rangeMode='custom';
+    if(!H.dateFrom||!H.dateTo){H.dateFrom=_hIsoDate(new Date(now.getFullYear(),now.getMonth(),1));H.dateTo=_hIsoDate(to);}
+    var df=document.getElementById('hDateFrom'),dt=document.getElementById('hDateTo');if(df)df.value=H.dateFrom;if(dt)dt.value=H.dateTo;
+    _setHistoryRangeUI('custom');return false;
+  }
+  if(mode==='7d')from.setDate(to.getDate()-6);
+  else if(mode==='30d')from.setDate(to.getDate()-29);
+  else if(mode==='month')from=new Date(now.getFullYear(),now.getMonth(),1);
+  else if(mode==='today'){}
+  H.rangeMode=mode;H.dateFrom=_hIsoDate(from);H.dateTo=_hIsoDate(to);
+  var df2=document.getElementById('hDateFrom'),dt2=document.getElementById('hDateTo');if(df2)df2.value=H.dateFrom;if(dt2)dt2.value=H.dateTo;
+  _setHistoryRangeUI(mode);_loadHistoryRangeFromServer();return false;
+}
+function applyHistoryDateRange(ev){
+  if(ev&&ev.preventDefault)ev.preventDefault();
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  H.rangeMode='custom';
+  H.dateFrom=(document.getElementById('hDateFrom').value||'').trim();
+  H.dateTo=(document.getElementById('hDateTo').value||'').trim();
+  _setHistoryRangeUI('custom');_loadHistoryRangeFromServer();return false;
+}
+function initHistoryRangeFilter(){
+  _setHistoryRangeUI(H.rangeMode||'recent');
+}
+document.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('.h-range-btn');
+  if(b){setHistoryQuickRange(b.getAttribute('data-range')||'recent',e);return;}
+  var a=e.target.closest&&e.target.closest('#hRangeApply');
+  if(a){applyHistoryDateRange(e);return;}
+},true);
+window.setHistoryQuickRange=setHistoryQuickRange;
+window.applyHistoryDateRange=applyHistoryDateRange;
+window.initHistoryRangeFilter=initHistoryRangeFilter;
 
-function onHInput(){var v=document.getElementById('hSearch').value;document.getElementById('hClr').classList.toggle('on',v.length>0);clearTimeout(_hSearchTimer);if(H.allLoaded){_hSearchTimer=setTimeout(applyClientFilter,0);}else{_hSearchTimer=setTimeout(function(){_serverLoad(1);},380);}}
-function clearHSearch(){document.getElementById('hSearch').value='';document.getElementById('hClr').classList.remove('on');applyClientFilter();}
+function onHInput(){var v=document.getElementById('hSearch').value;document.getElementById('hClr').classList.toggle('on',v.length>0);clearTimeout(_hSearchTimer);if(H.rangeMode!=='recent'&&H.dateFrom&&H.dateTo){_hSearchTimer=setTimeout(function(){_loadHistoryRangeFromServer();},380);}else if(H.allLoaded){_hSearchTimer=setTimeout(applyClientFilter,0);}else{_hSearchTimer=setTimeout(function(){_serverLoad(1);},380);}}
+function clearHSearch(){document.getElementById('hSearch').value='';document.getElementById('hClr').classList.remove('on');if(H.rangeMode!=='recent'&&H.dateFrom&&H.dateTo){_loadHistoryRangeFromServer();}else applyClientFilter();}
 function doSearchAll(){
   var q=(document.getElementById('hSearch').value||'').trim();
   var fProc=document.getElementById('hProc').value||'';
@@ -2880,10 +2903,11 @@ function doSearchAll(){
     }
   );
 }
-function onFilterChange(){clearTimeout(_hFilterTimer);clearTimeout(_hSearchTimer);if(H.allLoaded){applyClientFilter();}else{_hFilterTimer=setTimeout(function(){_serverLoad(1);},120);}}
+function onFilterChange(){clearTimeout(_hFilterTimer);clearTimeout(_hSearchTimer);if(H.rangeMode!=='recent'&&H.dateFrom&&H.dateTo){_hFilterTimer=setTimeout(function(){_loadHistoryRangeFromServer();},120);}else if(H.allLoaded){applyClientFilter();}else{_hFilterTimer=setTimeout(function(){_serverLoad(1);},120);}}
 function gotoPage2(p){var filtered=H._filtered||H.all;var maxP=Math.ceil(filtered.length/H.pageSize);if(p<1||p>maxP)return;H.page=p;var start=(p-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);var f=getHFilter();requestAnimationFrame(function(){renderHistoryList(H.sessions,f.q);renderPagerClient(filtered.length);updateHStat(H.sessions,f);});var sb=document.getElementById('hScrollBody');if(sb)sb.scrollTop=0;}
 function _openHistory(){
-  if(H.rangeMode!=='recent'&&H.dateFrom&&H.dateTo){applyHistoryDateRange();return;}
+  initHistoryRangeFilter();
+  if(H.rangeMode!=='recent'&&H.dateFrom&&H.dateTo){_loadHistoryRangeFromServer();return;}
   // Hiện cache ngay nếu có, rồi refresh ngầm
   var hc=null;
   try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
