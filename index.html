@@ -1263,7 +1263,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbysmYMLALPTUgfqATKBpAsCRA
 var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
 var _notePhotoName   = '';
-var H = { page:1, total:0, pageSize:30, inspList:[], loading:false, sessions:[], all:[], allLoaded:false, mode:'recent', recentAll:[], recentInspList:[] };
+var H = { page:1, total:0, pageSize:30, inspList:[], loading:false, sessions:[], all:[], allLoaded:false };
 var QKEY = 'ipqc_v4_queue';
 var LKEY = 'ipqc_login';  // localStorage key lưu login session
 
@@ -2044,31 +2044,24 @@ function _isDecimalValueItem(name){
          n.indexOf('delta_e')>=0 || n.indexOf('deltae')>=0 ||
          n.indexOf('moisure')>=0 || n.indexOf('moisture')>=0;
 }
-function _cleanDecimalInput(v){
-  var s=String(v||'').trim().replace(/[，٫]/g,',');
-  var commaCount=(s.match(/,/g)||[]).length;
-  var dotCount=(s.match(/\./g)||[]).length;
-  if(dotCount===0 && commaCount===1) return s.replace(',', '.');
-  if(dotCount===1 && commaCount>0) return s.replace(/,/g,'');
-  return s;
-}
-function _isValidDecimalInput(v){return /^\d+(?:\.\d+)?$/.test(_cleanDecimalInput(v));}
-function _decimalInputAttr(){return ' inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)"';}
+function _cleanDecimalInput(v){return String(v||'').trim();}
+function _isValidDecimalInput(v){return /^\d+(?:\.\d+)?$/.test(String(v||'').trim());}
+function _decimalInputAttr(){return ' inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)"';}
 function decimalBeforeInput(e,el){
   if(e.inputType&&e.inputType.indexOf('delete')===0) return true;
   var d=e.data; if(d==null) return true;
-  if(!/^[0-9.,，٫]$/.test(d)) return false;
+  if(!/^[0-9.]$/.test(d)) return false;
   var v=String(el.value||''), st=el.selectionStart||0, en=el.selectionEnd||0;
   var next=v.slice(0,st)+d+v.slice(en);
-  return /^\d+(?:\.\d*)?$/.test(_cleanDecimalInput(next));
+  return /^\d+(?:\.\d*)?$/.test(next);
 }
 function decimalPaste(e,el){
   var t=(e.clipboardData||window.clipboardData).getData('text')||'';
   var v=String(el.value||''), st=el.selectionStart||0, en=el.selectionEnd||0;
   var next=v.slice(0,st)+t+v.slice(en);
-  return /^\d+(?:\.\d+)?$/.test(_cleanDecimalInput(next));
+  return /^\d+(?:\.\d+)?$/.test(next);
 }
-function _setDecimalFieldError(el,on)function _setDecimalFieldError(el,on){if(el)el.style.borderColor=on?'var(--ng)':'';}
+function _setDecimalFieldError(el,on){if(el)el.style.borderColor=on?'var(--ng)':'';}
 function _validateDecimalValuesBeforeSave(){
   for(var i=0;i<S.items.length;i++){
     var it=S.items[i];
@@ -2080,7 +2073,7 @@ function _validateDecimalValuesBeforeSave(){
           var de=document.querySelector('#decx_'+i+'_'+j+' input');
           var wrap=document.getElementById('decx_'+i+'_'+j); if(wrap)wrap.classList.add('on');
           _setDecimalFieldError(de,true); if(de)de.focus();
-          showToast('⚠️ Delta_E chỉ được nhập số thập phân. Ví dụ: 23.45 hoặc 23,45','er',4500);
+          showToast('⚠️ Delta_E chỉ được nhập số thập phân. Ví dụ: 23.45, 235, 0.05','er',4500);
           return false;
         }
       }
@@ -2091,7 +2084,7 @@ function _validateDecimalValuesBeforeSave(){
           var dm=document.querySelector('#dimcx_'+i+'_'+k+' input');
           var dw=document.getElementById('dimcx_'+i+'_'+k); if(dw)dw.classList.add('on');
           _setDecimalFieldError(dm,true); if(dm)dm.focus();
-          showToast('⚠️ Dimension chỉ được nhập số thập phân. Ví dụ: 23.45 hoặc 23,45','er',4500);
+          showToast('⚠️ Dimension chỉ được nhập số thập phân. Ví dụ: 23.45, 235, 0.05','er',4500);
           return false;
         }
       }
@@ -2101,7 +2094,7 @@ function _validateDecimalValuesBeforeSave(){
         var w=document.getElementById('icx'+i); if(w)w.classList.add('on');
         var inp=w?w.querySelector('input'):null;
         _setDecimalFieldError(inp,true); if(inp)inp.focus();
-        showToast('⚠️ '+it.itemcheck+' chỉ được nhập số thập phân. Ví dụ: 23.45 hoặc 23,45','er',4500);
+        showToast('⚠️ '+it.itemcheck+' chỉ được nhập số thập phân. Ví dụ: 23.45, 235, 0.05','er',4500);
         return false;
       }
     }
@@ -2169,7 +2162,7 @@ function buildDeltaHTML(item,i){
           +'<button class="cx'+(row.value?' on':'')+'" onclick="deToggleVal('+i+','+j+')">📏 Value</button>'
         +'</div>'
         +'<div class="de-cx'+(row.value?' on':'')+'" id="decx_'+i+'_'+j+'">'
-          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
+          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
           +' oninput="deCustom('+i+','+j+',this.value,this)"></div>'
         +'<div class="de-note"><input type="text" placeholder="Ghi chú..." value="'+esc(row.note)+'"'
           +' oninput="S.items['+i+'].dRows['+j+'].note=this.value"></div>'
@@ -2249,7 +2242,7 @@ function buildDimHTML(item,i){
           +'<button class="cx'+(row.value?' on':'')+'" onclick="dimToggleVal('+i+','+j+')">📏 Value</button>'
         +'</div>'
         +'<div class="de-cx'+(row.value?' on':'')+'" id="dimcx_'+i+'_'+j+'">'
-          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
+          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
           +' oninput="dimCustom('+i+','+j+',this.value,this)"></div>'
         +'<div class="de-note"><input type="text" placeholder="Ghi chú..." value="'+esc(row.note)+'"'
           +' oninput="S.items['+i+'].dimRows['+j+'].note=this.value"></div>'
@@ -2753,33 +2746,6 @@ function resetForm(){
 // HISTORY
 // ══════════════════════════════════════════════════════════════
 var _hSearchTimer=null,_hFilterTimer=null,_hReqId=0,_bgRefTimer=null;
-function _rememberRecentHistory(list,inspList){
-  if(H.mode==='searchAll')return;
-  var src=list||H.all||[];
-  if(src&&src.length){
-    H.recentAll=src.slice(0,200);
-    H.recentInspList=(inspList||H.inspList||[]).slice(0);
-  }
-}
-function _restoreRecentHistory(){
-  clearTimeout(_hSearchTimer);clearTimeout(_hFilterTimer);clearTimeout(_bgRefTimer);
-  H.mode='recent';
-  var restored=false;
-  if(H.recentAll&&H.recentAll.length){
-    H.all=H.recentAll.slice();H.inspList=(H.recentInspList||[]).slice();restored=true;
-  } else {
-    try{
-      var hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');
-      if(hc&&hc.all&&hc.all.length){
-        H.all=hc.all.slice(0,200);H.inspList=hc.inspList||[];restored=true;
-      }
-    }catch(e){}
-  }
-  if(restored){
-    H.allLoaded=true;H.pageSize=60;H._filtered=null;_rebuildDropdowns();applyClientFilter();return true;
-  }
-  H.allLoaded=false;_serverLoad(1);return false;
-}
 function getHFilter(){return{q:(document.getElementById('hSearch').value||'').trim(),process:document.getElementById('hProc').value||'',inspector:document.getElementById('hQC').value||''};}
 function applyClientFilter(){
   var f=getHFilter();var qLow=f.q.toLowerCase();var filtered=H.all;
@@ -2791,39 +2757,27 @@ function applyClientFilter(){
   H.total=filtered.length;H.page=1;var start=(H.page-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);H._filtered=filtered;
   requestAnimationFrame(function(){renderHistoryList(H.sessions,f.q);renderPagerClient(filtered.length);updateHStat(H.sessions,f);});
 }
-function onHInput(){
-  var v=document.getElementById('hSearch').value;
-  document.getElementById('hClr').classList.toggle('on',v.length>0);
-  clearTimeout(_hSearchTimer);
-  if(!v.trim()&&H.mode==='searchAll'){_restoreRecentHistory();return;}
-  if(H.allLoaded){_hSearchTimer=setTimeout(applyClientFilter,0);}else{_hSearchTimer=setTimeout(function(){_serverLoad(1);},380);}
-}
-function clearHSearch(){document.getElementById('hSearch').value='';document.getElementById('hClr').classList.remove('on');if(H.mode==='searchAll'){_restoreRecentHistory();return;}applyClientFilter();}
+function onHInput(){var v=document.getElementById('hSearch').value;document.getElementById('hClr').classList.toggle('on',v.length>0);clearTimeout(_hSearchTimer);if(H.allLoaded){_hSearchTimer=setTimeout(applyClientFilter,0);}else{_hSearchTimer=setTimeout(function(){_serverLoad(1);},380);}}
+function clearHSearch(){document.getElementById('hSearch').value='';document.getElementById('hClr').classList.remove('on');applyClientFilter();}
 function doSearchAll(){
   var q=(document.getElementById('hSearch').value||'').trim();
   var fProc=document.getElementById('hProc').value||'';
   var fInsp=document.getElementById('hQC').value||'';
   if(!q&&!fProc&&!fInsp){showToast('Nhập từ khoá để tìm toàn bộ lịch sử','er',3000);return;}
   if(!S.online){showToast('📴 Cần mạng để tìm toàn bộ lịch sử','er',3000);return;}
-  _rememberRecentHistory();
-  H.mode='searchAll';
-  var searchReqId=++_hReqId;
-  clearTimeout(_bgRefTimer);clearTimeout(_hFilterTimer);clearTimeout(_hSearchTimer);
   var btn=document.getElementById('hSearchAllBtn');
   if(btn){btn.textContent='⏳ Đang tìm...';btn.disabled=true;}
   showHLoading();
   gasSearchAll({filter:{q:q,process:fProc,inspector:fInsp}},
     function(r){
-      if(searchReqId!==_hReqId)return;
       if(btn){btn.textContent='🔍 Tất cả';btn.disabled=false;}
       hideHLoading();
       if(!r||!r.ok){showToast('⚠️ Lỗi: '+(r&&r.error||''),'er');return;}
-      H.all=r.data||[];H.allLoaded=true;H.mode='searchAll';H.pageSize=60;
+      H.all=r.data||[];H.allLoaded=false;H.pageSize=60;
       applyClientFilter();
       showToast('✅ Tìm thấy '+r.total+' phiên trong toàn bộ lịch sử','ok',4000);
     },
     function(err){
-      if(searchReqId!==_hReqId)return;
       if(btn){btn.textContent='🔍 Tất cả';btn.disabled=false;}
       hideHLoading();
       showToast('⚠️ Lỗi kết nối','er');
@@ -2838,8 +2792,7 @@ function _openHistory(){
   try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
   var CACHE_TTL = 10*60*1000; // 10 phút
   if(hc && hc.all && hc.all.length && (Date.now()-(hc.ts||0)) < CACHE_TTL){
-    H.all=hc.all; H.inspList=hc.inspList||[]; H.allLoaded=true; H.mode='recent'; H.pageSize=60;
-    _rememberRecentHistory(H.all,H.inspList);
+    H.all=hc.all; H.inspList=hc.inspList||[]; H.allLoaded=true; H.pageSize=60;
     _rebuildDropdowns(); applyClientFilter();
     _bgRefreshHistory(); // refresh ngầm
     return;
@@ -2853,8 +2806,7 @@ function _serverLoad(page){
     var hc=null;
     try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
     if(hc&&hc.all&&hc.all.length){
-      H.all=hc.all;H.inspList=hc.inspList||[];H.allLoaded=true;H.mode='recent';H.pageSize=60;
-      _rememberRecentHistory(H.all,H.inspList);
+      H.all=hc.all;H.inspList=hc.inspList||[];H.allLoaded=true;H.pageSize=60;
       _rebuildDropdowns();applyClientFilter();
       showToast('📴 Lịch sử offline ('+hc.all.length+' phiên)','',3000);
     } else {
@@ -2867,13 +2819,12 @@ function _serverLoad(page){
   // Không dùng dayLimit — lấy toàn bộ HIST_MONTHS tháng, mới nhất lên đầu
   gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,maxSessions:200},
     function(r){
-      if(reqId!==_hReqId||H.mode==='searchAll')return;
+      if(reqId!==_hReqId)return;
       hideHLoading();
       if(!r||!r.ok){showToast('⚠️ Lỗi tải lịch sử','er');return;}
       var raw=r.data||[];
-      H.all=raw; H.allLoaded=true; H.mode='recent'; H.pageSize=60;
+      H.all=raw; H.allLoaded=true; H.pageSize=60;
       if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
-      _rememberRecentHistory(raw,r.inspList||H.inspList);
       applyClientFilter();
       try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:raw.slice(0,200),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
     },
@@ -2886,8 +2837,7 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
     try{
       var hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');
       if(hc&&hc.all&&hc.all.length&&H.all.length===0){
-        H.all=hc.all;H.inspList=hc.inspList||[];H.allLoaded=true;H.mode='recent';H.pageSize=60;
-        _rememberRecentHistory(H.all,H.inspList);
+        H.all=hc.all;H.inspList=hc.inspList||[];H.allLoaded=true;H.pageSize=60;
         _rebuildDropdowns();applyClientFilter();
         showToast('📴 Lịch sử offline ('+hc.all.length+' phiên)','',3000);
       }
@@ -2896,12 +2846,11 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
   }
   var reqId=++_hReqId;var statEl=document.getElementById('hStat');if(statEl)statEl.style.opacity='0.55';
   gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,maxSessions:200},function(r){
-    if(reqId!==_hReqId||H.mode==='searchAll')return;if(statEl)statEl.style.opacity='';if(!r||!r.ok)return;
+    if(reqId!==_hReqId)return;if(statEl)statEl.style.opacity='';if(!r||!r.ok)return;
     var newAll=(r.data||[]);
     var changed=(newAll.length!==H.all.length)||(newAll.length>0&&H.all.length>0&&newAll[0].tsNum!==H.all[0].tsNum);
-    H.all=newAll;H.mode='recent';
+    H.all=newAll;
     if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
-    _rememberRecentHistory(newAll,r.inspList||H.inspList);
     if(changed)applyClientFilter();
     try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:newAll.slice(0,200),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
   },function(){if(statEl)statEl.style.opacity='';});
