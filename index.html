@@ -2044,24 +2044,31 @@ function _isDecimalValueItem(name){
          n.indexOf('delta_e')>=0 || n.indexOf('deltae')>=0 ||
          n.indexOf('moisure')>=0 || n.indexOf('moisture')>=0;
 }
-function _cleanDecimalInput(v){return String(v||'').trim();}
-function _isValidDecimalInput(v){return /^\d+(?:\.\d+)?$/.test(String(v||'').trim());}
-function _decimalInputAttr(){return ' inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)"';}
+function _cleanDecimalInput(v){
+  var s=String(v||'').trim().replace(/[，٫]/g,',');
+  var commaCount=(s.match(/,/g)||[]).length;
+  var dotCount=(s.match(/\./g)||[]).length;
+  if(dotCount===0 && commaCount===1) return s.replace(',', '.');
+  if(dotCount===1 && commaCount>0) return s.replace(/,/g,'');
+  return s;
+}
+function _isValidDecimalInput(v){return /^\d+(?:\.\d+)?$/.test(_cleanDecimalInput(v));}
+function _decimalInputAttr(){return ' inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)"';}
 function decimalBeforeInput(e,el){
   if(e.inputType&&e.inputType.indexOf('delete')===0) return true;
   var d=e.data; if(d==null) return true;
-  if(!/^[0-9.]$/.test(d)) return false;
+  if(!/^[0-9.,，٫]$/.test(d)) return false;
   var v=String(el.value||''), st=el.selectionStart||0, en=el.selectionEnd||0;
   var next=v.slice(0,st)+d+v.slice(en);
-  return /^\d+(?:\.\d*)?$/.test(next);
+  return /^\d+(?:\.\d*)?$/.test(_cleanDecimalInput(next));
 }
 function decimalPaste(e,el){
   var t=(e.clipboardData||window.clipboardData).getData('text')||'';
   var v=String(el.value||''), st=el.selectionStart||0, en=el.selectionEnd||0;
   var next=v.slice(0,st)+t+v.slice(en);
-  return /^\d+(?:\.\d+)?$/.test(next);
+  return /^\d+(?:\.\d+)?$/.test(_cleanDecimalInput(next));
 }
-function _setDecimalFieldError(el,on){if(el)el.style.borderColor=on?'var(--ng)':'';}
+function _setDecimalFieldError(el,on)function _setDecimalFieldError(el,on){if(el)el.style.borderColor=on?'var(--ng)':'';}
 function _validateDecimalValuesBeforeSave(){
   for(var i=0;i<S.items.length;i++){
     var it=S.items[i];
@@ -2073,7 +2080,7 @@ function _validateDecimalValuesBeforeSave(){
           var de=document.querySelector('#decx_'+i+'_'+j+' input');
           var wrap=document.getElementById('decx_'+i+'_'+j); if(wrap)wrap.classList.add('on');
           _setDecimalFieldError(de,true); if(de)de.focus();
-          showToast('⚠️ Delta_E chỉ được nhập số thập phân. Ví dụ: 23.45, 235, 0.05','er',4500);
+          showToast('⚠️ Delta_E chỉ được nhập số thập phân. Ví dụ: 23.45 hoặc 23,45','er',4500);
           return false;
         }
       }
@@ -2084,7 +2091,7 @@ function _validateDecimalValuesBeforeSave(){
           var dm=document.querySelector('#dimcx_'+i+'_'+k+' input');
           var dw=document.getElementById('dimcx_'+i+'_'+k); if(dw)dw.classList.add('on');
           _setDecimalFieldError(dm,true); if(dm)dm.focus();
-          showToast('⚠️ Dimension chỉ được nhập số thập phân. Ví dụ: 23.45, 235, 0.05','er',4500);
+          showToast('⚠️ Dimension chỉ được nhập số thập phân. Ví dụ: 23.45 hoặc 23,45','er',4500);
           return false;
         }
       }
@@ -2094,7 +2101,7 @@ function _validateDecimalValuesBeforeSave(){
         var w=document.getElementById('icx'+i); if(w)w.classList.add('on');
         var inp=w?w.querySelector('input'):null;
         _setDecimalFieldError(inp,true); if(inp)inp.focus();
-        showToast('⚠️ '+it.itemcheck+' chỉ được nhập số thập phân. Ví dụ: 23.45, 235, 0.05','er',4500);
+        showToast('⚠️ '+it.itemcheck+' chỉ được nhập số thập phân. Ví dụ: 23.45 hoặc 23,45','er',4500);
         return false;
       }
     }
@@ -2162,7 +2169,7 @@ function buildDeltaHTML(item,i){
           +'<button class="cx'+(row.value?' on':'')+'" onclick="deToggleVal('+i+','+j+')">📏 Value</button>'
         +'</div>'
         +'<div class="de-cx'+(row.value?' on':'')+'" id="decx_'+i+'_'+j+'">'
-          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
+          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
           +' oninput="deCustom('+i+','+j+',this.value,this)"></div>'
         +'<div class="de-note"><input type="text" placeholder="Ghi chú..." value="'+esc(row.note)+'"'
           +' oninput="S.items['+i+'].dRows['+j+'].note=this.value"></div>'
@@ -2242,7 +2249,7 @@ function buildDimHTML(item,i){
           +'<button class="cx'+(row.value?' on':'')+'" onclick="dimToggleVal('+i+','+j+')">📏 Value</button>'
         +'</div>'
         +'<div class="de-cx'+(row.value?' on':'')+'" id="dimcx_'+i+'_'+j+'">'
-          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
+          +'<input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onbeforeinput="return decimalBeforeInput(event,this)" onpaste="return decimalPaste(event,this)" placeholder="Value / Giá trị thực tế..." value="'+esc(row.value||'')+'"'
           +' oninput="dimCustom('+i+','+j+',this.value,this)"></div>'
         +'<div class="de-note"><input type="text" placeholder="Ghi chú..." value="'+esc(row.note)+'"'
           +' oninput="S.items['+i+'].dimRows['+j+'].note=this.value"></div>'
