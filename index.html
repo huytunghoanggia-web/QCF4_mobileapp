@@ -280,6 +280,12 @@ textarea{resize:none;line-height:1.5}
 .note-remark-footer{display:flex;justify-content:flex-end;padding:0 10px 8px;border-top:1px solid #f0f0f4}
 .note-remark-count{font-size:11px;color:var(--txt3);font-family:var(--mono)}
 
+/* PROCESS INSTRUCTION */
+.proc-instruction{display:none;margin:0 0 10px 0;background:#f8fafc;border:1.5px solid #cbd5e1;border-left:4px solid var(--ac);border-radius:10px;padding:10px 12px;color:var(--txt);line-height:1.55}
+.proc-instruction.on{display:block}
+.proc-instruction-title{font-size:11px;font-weight:800;color:var(--ac);letter-spacing:.3px;text-transform:uppercase;margin-bottom:3px}
+.proc-instruction-body{font-size:13px;font-weight:600;white-space:pre-line}
+
 /* PAY ATTENTION */
 .pa-box{margin-top:8px;display:none;flex-direction:column;gap:6px}
 .pa-box.on{display:flex}
@@ -1139,12 +1145,9 @@ input[type=file]{display:none}
     <div class="step-line"></div>
     <div class="step"><div class="step-dot">3</div><div class="step-lbl">Xác nhận</div></div>
   </div>
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <div style="font-size:12px;color:var(--txt2)">
-      <span id="bSO" style="font-family:var(--mono);color:var(--ac);font-weight:600"></span>
-      <span style="margin:0 4px">·</span><span id="bProc"></span>
-    </div>
-    <div style="font-size:12px;color:var(--txt2)" id="bPg"></div>
+  <div id="procInstructionBox" class="proc-instruction">
+    <div class="proc-instruction-title">Chỉ dẫn chung</div>
+    <div class="proc-instruction-body" id="procInstructionText"></div>
   </div>
   <div id="itemList" style="padding-bottom:calc(120px + env(safe-area-inset-bottom,0px))"></div>
 </div><!-- /sB -->
@@ -1515,6 +1518,7 @@ function bootApp(){
     _syncPARowsFromBoot();
     buildDropdowns();
     _buildMachineList(data.machineList||[]);
+    renderProcessInstruction();
     if(!fromCache) startPAPolling();
     try{
       localStorage.setItem('rpac_boot_cache', JSON.stringify({data:data, ts:Date.now()}));
@@ -1600,6 +1604,7 @@ function doRefreshData(){
       _syncPARowsFromBoot();
       buildDropdowns();
       _buildMachineList(data.machineList||[]);
+      renderProcessInstruction();
       try{
         localStorage.setItem('rpac_boot_cache', JSON.stringify({data:data, ts:Date.now()}));
       }catch(e){}
@@ -1859,6 +1864,22 @@ function showScreen(s){
 var _soDDopen=false,_soTimer=null,_soUppCache=null;
 function getSOList(){return(S.boot&&S.boot.soList)?S.boot.soList:[];}
 function getSOMap(){return(S.boot&&S.boot.soMap)?S.boot.soMap:{};}
+function getInstructionMap(){return(S.boot&&S.boot.instructionsByProcess)?S.boot.instructionsByProcess:{};}
+function getProcessInstruction(proc){
+  var map=getInstructionMap(),key=String(proc||'').trim();
+  if(!key)return '';
+  if(map[key])return String(map[key]||'').trim();
+  var low=key.toLowerCase();
+  for(var k in map){if(String(k||'').trim().toLowerCase()===low)return String(map[k]||'').trim();}
+  return '';
+}
+function renderProcessInstruction(){
+  var box=document.getElementById('procInstructionBox'),txt=document.getElementById('procInstructionText');
+  if(!box||!txt)return;
+  var note=getProcessInstruction(S.process);
+  if(note){txt.textContent=note;box.classList.add('on');}
+  else{txt.textContent='';box.classList.remove('on');}
+}
 function getSOUpper(){if(!_soUppCache)_soUppCache=getSOList().map(function(s){return s.toUpperCase();});return _soUppCache;}
 function openSODD(){var dd=document.getElementById('soDD');renderSODD(document.getElementById('soInput').value);dd.classList.add('open');_soDDopen=true;}
 function closeSODD(){document.getElementById('soDD').classList.remove('open');_soDDopen=false;}
@@ -2015,10 +2036,10 @@ function goToB(){
            dimRows:isDim?[{lbl:'L',result:'',value:'',note:''},{lbl:'W',result:'',value:'',note:''},{lbl:'H',result:'',value:'',note:''}]:null};
   });
   if(S.online)gasCheckDup(S.selectedSOs[0],proc,function(r){if(r&&r.ok&&r.exists){var el=document.getElementById('alertDup');el.textContent='⚠️ '+S.selectedSOs[0]+' đã có lần kiểm tại "'+proc+'". Vẫn có thể tiếp tục.';el.classList.add('on');}});
-  document.getElementById('bSO').textContent=S.selectedSOs.length>1?S.selectedSOs.length+' SOs':S.selectedSOs[0];
-  document.getElementById('bProc').textContent=proc;
+  var _bso=document.getElementById('bSO');if(_bso)_bso.textContent=S.selectedSOs.length>1?S.selectedSOs.length+' SOs':S.selectedSOs[0];
+  var _bproc=document.getElementById('bProc');if(_bproc)_bproc.textContent=proc;
   _pbFillEl=null;_bPgEl=null;_spbCount=null;_spbEl=null;_spbSO=null;_spbSegs=null;
-  renderItems();showScreen('B');
+  renderProcessInstruction();renderItems();showScreen('B');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3965,4 +3986,3 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
-
