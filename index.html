@@ -3344,10 +3344,15 @@ goToB=function(){if(_mode==='note'){if(!S.selectedSOs.length){showToast('⚠️ 
 // ══════════════════════════════════════════════════════════════
 var _paRows         = [];   // cache đầy đủ từ boot/refresh
 var _paUnholdedLocal = {};  // { rowIndex: {reason,email,ts} } – unhold vừa làm
+var _paInitialSyncDone = false; // Lần đồng bộ đầu chỉ lấy mốc, không bắn thông báo cũ
 
+function _markPAKnown(rows){
+  (rows||[]).forEach(function(r){_paKnownKeys[r.rowIndex+'_'+r.remark]=true;});
+}
 // Khởi tạo _paRows từ S.boot khi boot xong — gọi 1 lần trong bootApp
 function _syncPARowsFromBoot(){
   _paRows = (S.boot && S.boot.payAttention) ? S.boot.payAttention.slice() : [];
+  if(_paRows.length){_markPAKnown(_paRows);_paInitialSyncDone=true;}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3389,6 +3394,7 @@ function _doPAPoll(){
       if(r && r.ok && r.rows){
         var newRows = r.rows;
         var oldLen  = _paRows.length;
+        var isInitialBaseline = !_paInitialSyncDone;
 
         // Phát hiện thay đổi
         var changed = (newRows.length !== oldLen);
@@ -3408,6 +3414,11 @@ function _doPAPoll(){
           if(S.boot) S.boot.payAttention = newRows;
           if(S.selectedSOs && S.selectedSOs.length) _renderPABox();
 
+          // Lần đồng bộ đầu chỉ ghi nhận các ghi chú đang tồn tại, không làm đầy màn hình.
+          if(isInitialBaseline){
+            _markPAKnown(newRows);
+            _paInitialSyncDone=true;
+          } else {
           // ── Phát hiện ghi chú / hold MỚI ──
           newRows.forEach(function(nr){
             var key = nr.rowIndex + '_' + nr.remark;
@@ -3441,6 +3452,10 @@ function _doPAPoll(){
               _paKnownKeys[nr.rowIndex+'_'+nr.remark] = true;
             });
           }
+          }
+        } else if(isInitialBaseline){
+          _markPAKnown(newRows);
+          _paInitialSyncDone=true;
         }
       }
       _schedulePAPoll();
