@@ -1319,6 +1319,7 @@ function gasGetAppData(ok,err)   { _gasCall('getAppData',{},ok,err); }
 function gasSaveResults(p,ok,err){ _gasCallSaveResults(p,ok,err); }
 function gasGetHistory(p,ok,err) { _gasCall('getHistory',{params:p},ok,err); }
 function gasSearchAll(p,ok,err)  { _gasCall('searchAllHistory',{params:p},ok,err); }
+function gasGetHistoryVersion(ok,err){ _gasCall('getHistoryVersion',{},ok,err||function(){}); }
 function gasCheckDup(so,pr,ok)   { _gasCall('checkDup',{so:so,process:pr},ok,function(){}); }
 // gasGetPARows — không dùng nữa (PA data đã có trong bootApp)
 // function gasGetPARows(ok,err){ _gasCall('getPayAttentionRows',{},ok,err||function(){}); }
@@ -1425,7 +1426,7 @@ window.onload = function(){
   try{
     var _hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');
     // Nếu cache cũ hơn 1 ngày → xóa để fetch lại từ GAS
-    if(_hc && (!_hc.ts || Date.now()-_hc.ts > 24*3600*1000)){
+    if(_hc && (!_hc.ts || Date.now()-_hc.ts > 7*24*3600*1000)){
       localStorage.removeItem('rpac_hist_cache');
     }
   }catch(e){}
@@ -1489,16 +1490,19 @@ function _showLoginWithMsg(msg){
 var _BOOT_DB_NAME = 'rpac_boot_cache_db';
 var _BOOT_DB_STORE = 'boot';
 var _BOOT_DB_KEY = 'latest';
+var _HIST_DB_STORE = 'history';
+var _HIST_DB_KEY = 'recent200';
 
 function _openBootCacheDB(){
   return new Promise(function(resolve, reject){
     if(!window.indexedDB){ resolve(null); return; }
     var req;
-    try{ req=window.indexedDB.open(_BOOT_DB_NAME, 1); }
+    try{ req=window.indexedDB.open(_BOOT_DB_NAME, 2); }
     catch(e){ reject(e); return; }
     req.onupgradeneeded=function(){
       var db=req.result;
       if(!db.objectStoreNames.contains(_BOOT_DB_STORE)) db.createObjectStore(_BOOT_DB_STORE);
+      if(!db.objectStoreNames.contains(_HIST_DB_STORE)) db.createObjectStore(_HIST_DB_STORE);
     };
     req.onsuccess=function(){ resolve(req.result); };
     req.onerror=function(){ reject(req.error||new Error('IndexedDB unavailable')); };
@@ -1531,6 +1535,35 @@ function _saveBootCache(data){
   var payload={data:data,ts:Date.now()};
   try{ localStorage.setItem('rpac_boot_cache', JSON.stringify(payload)); }catch(e){}
   _savePersistentBootCache(payload).catch(function(){});
+}
+
+function _readPersistentHistoryCache(){
+  return _openBootCacheDB().then(function(db){
+    if(!db) return null;
+    return new Promise(function(resolve, reject){
+      var tx=db.transaction(_HIST_DB_STORE,'readonly');
+      var req=tx.objectStore(_HIST_DB_STORE).get(_HIST_DB_KEY);
+      req.onsuccess=function(){ var value=req.result||null; db.close(); resolve(value); };
+      req.onerror=function(){ db.close(); reject(req.error||new Error('History cache read failed')); };
+    });
+  });
+}
+function _savePersistentHistoryCache(payload){
+  return _openBootCacheDB().then(function(db){
+    if(!db) return false;
+    return new Promise(function(resolve, reject){
+      var tx=db.transaction(_HIST_DB_STORE,'readwrite');
+      tx.objectStore(_HIST_DB_STORE).put(payload,_HIST_DB_KEY);
+      tx.oncomplete=function(){ db.close(); resolve(true); };
+      tx.onerror=function(){ db.close(); reject(tx.error||new Error('History cache write failed')); };
+      tx.onabort=function(){ db.close(); reject(tx.error||new Error('History cache write aborted')); };
+    });
+  });
+}
+function _saveHistoryCache(list, inspList){
+  var payload={all:(list||[]).slice(0,200),inspList:inspList||[],ts:Date.now()};
+  try{ localStorage.setItem('rpac_hist_cache',JSON.stringify(payload)); }catch(e){}
+  _savePersistentHistoryCache(payload).catch(function(){});
 }
 
 async function bootApp(){
@@ -1889,7 +1922,14 @@ function gotoTab(tab){
   ['Check','History'].forEach(function(x){document.getElementById('pg'+x).classList.remove('on');document.getElementById('nav'+x).classList.remove('on');});
   document.getElementById('pg'+tab).classList.add('on');
   document.getElementById('nav'+tab).classList.add('on');
-  if(tab==='History')_openHistory();
+  if(tab==='History'){
+    _historyTabActive=true;
+    _openHistory();
+    _startHistoryLivePolling();
+  } else {
+    _historyTabActive=false;
+    _stopHistoryLivePolling();
+  }
   closeSODD();
 }
 function showScreen(s){
@@ -2842,14 +2882,14 @@ function _restoreRecentHistory(){
   H.allLoaded=false;_serverLoad(1);return false;
 }
 function getHFilter(){return{q:(document.getElementById('hSearch').value||'').trim(),process:document.getElementById('hProc').value||'',inspector:document.getElementById('hQC').value||''};}
-function applyClientFilter(){
+function applyClientFilter(keepPage){
   var f=getHFilter();var qLow=f.q.toLowerCase();var filtered=H.all;
   if(qLow){filtered=filtered.filter(function(s){var so=(s.so||'').toLowerCase();var ic=(s.itemCode||'').toLowerCase();var lc=(s.localCustomer||'').toLowerCase();return so.indexOf(qLow)>=0||ic.indexOf(qLow)>=0||lc.indexOf(qLow)>=0;});}
   if(f.process)filtered=filtered.filter(function(s){return s.process===f.process;});
   if(f.inspector)filtered=filtered.filter(function(s){return s.inspector===f.inspector;});
   // Sort mới nhất trước
   filtered=filtered.slice().sort(function(a,b){return (b.tsNum||0)-(a.tsNum||0);});
-  H.total=filtered.length;H.page=1;var start=(H.page-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);H._filtered=filtered;
+  H.total=filtered.length;var pageCount=Math.max(1,Math.ceil(H.total/H.pageSize));H.page=keepPage?Math.min(Math.max(H.page||1,1),pageCount):1;var start=(H.page-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);H._filtered=filtered;
   requestAnimationFrame(function(){renderHistoryList(H.sessions,f.q);renderPagerClient(filtered.length);updateHStat(H.sessions,f);});
 }
 function onHInput(){
@@ -2893,16 +2933,51 @@ function doSearchAll(){
 }
 function onFilterChange(){clearTimeout(_hFilterTimer);clearTimeout(_hSearchTimer);if(H.allLoaded){applyClientFilter();}else{_hFilterTimer=setTimeout(function(){_serverLoad(1);},120);}}
 function gotoPage2(p){var filtered=H._filtered||H.all;var maxP=Math.ceil(filtered.length/H.pageSize);if(p<1||p>maxP)return;H.page=p;var start=(p-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);var f=getHFilter();requestAnimationFrame(function(){renderHistoryList(H.sessions,f.q);renderPagerClient(filtered.length);updateHStat(H.sessions,f);});var sb=document.getElementById('hScrollBody');if(sb)sb.scrollTop=0;}
-function _openHistory(){
-  // Hiện cache ngay nếu có, rồi refresh ngầm
+var _historyLiveTimer=null;
+var _historyLiveVersion='';
+var _historyTabActive=false;
+var _HISTORY_LIVE_MS=60000;
+
+function _stopHistoryLivePolling(){
+  clearTimeout(_historyLiveTimer);
+  _historyLiveTimer=null;
+}
+function _scheduleHistoryLivePolling(){
+  _stopHistoryLivePolling();
+  if(_historyTabActive) _historyLiveTimer=setTimeout(_pollHistoryVersion,_HISTORY_LIVE_MS);
+}
+function _pollHistoryVersion(){
+  if(!_historyTabActive) return;
+  if(!S.online || H.mode==='searchAll'){ _scheduleHistoryLivePolling(); return; }
+  gasGetHistoryVersion(function(r){
+    if(!_historyTabActive) return;
+    if(r&&r.ok&&r.version){
+      if(_historyLiveVersion && _historyLiveVersion!==r.version) _bgRefreshHistory();
+      _historyLiveVersion=r.version;
+    }
+    _scheduleHistoryLivePolling();
+  },function(){
+    _scheduleHistoryLivePolling();
+  });
+}
+function _startHistoryLivePolling(){
+  if(!_historyTabActive) return;
+  _pollHistoryVersion();
+}
+
+async function _openHistory(){
+  // Show the latest local copy first, then refresh from GAS in the background.
   var hc=null;
   try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
-  var CACHE_TTL = 10*60*1000; // 10 phút
-  if(hc && hc.all && hc.all.length && (Date.now()-(hc.ts||0)) < CACHE_TTL){
-    H.all=hc.all; H.inspList=hc.inspList||[]; H.allLoaded=true; H.mode='recent'; H.pageSize=60;
+  if(!hc){
+    try{hc=await _readPersistentHistoryCache();}catch(e){}
+  }
+  var CACHE_TTL = 7*24*60*60*1000;
+  if(hc&&hc.all&&hc.all.length&&(Date.now()-(hc.ts||0))<CACHE_TTL){
+    H.all=hc.all.slice(0,200);H.inspList=hc.inspList||[];H.allLoaded=true;H.mode='recent';H.pageSize=60;
     _rememberRecentHistory(H.all,H.inspList);
-    _rebuildDropdowns(); applyClientFilter();
-    _bgRefreshHistory(); // refresh ngầm
+    _rebuildDropdowns();applyClientFilter();
+    _bgRefreshHistory();
     return;
   }
   if(H.allLoaded){applyClientFilter();_bgRefreshHistory();return;}
@@ -2936,7 +3011,7 @@ function _serverLoad(page){
       if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
       _rememberRecentHistory(raw,r.inspList||H.inspList);
       applyClientFilter();
-      try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:raw.slice(0,200),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
+      _saveHistoryCache(raw,r.inspList||[]);
     },
     function(){hideHLoading();showToast('⚠️ Lỗi kết nối','er');}
   );
@@ -2963,8 +3038,8 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
     H.all=newAll;H.mode='recent';
     if(r.inspList){H.inspList=r.inspList;_rebuildDropdowns();}
     _rememberRecentHistory(newAll,r.inspList||H.inspList);
-    if(changed)applyClientFilter();
-    try{localStorage.setItem('rpac_hist_cache',JSON.stringify({all:newAll.slice(0,200),inspList:r.inspList||[],ts:Date.now()}));}catch(e){}
+    if(changed)applyClientFilter(true);
+    _saveHistoryCache(newAll,r.inspList||H.inspList);
   },function(){if(statEl)statEl.style.opacity='';});
 },300);}
 var _machineList = [];
