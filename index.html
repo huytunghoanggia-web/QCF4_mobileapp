@@ -1484,7 +1484,56 @@ function _showLoginWithMsg(msg){
   setTimeout(function(){ document.getElementById('pwInp').focus(); }, 300);
 }
 
-function bootApp(){
+
+// Persistent boot cache: IndexedDB has a larger quota than localStorage on mobile.
+var _BOOT_DB_NAME = 'rpac_boot_cache_db';
+var _BOOT_DB_STORE = 'boot';
+var _BOOT_DB_KEY = 'latest';
+
+function _openBootCacheDB(){
+  return new Promise(function(resolve, reject){
+    if(!window.indexedDB){ resolve(null); return; }
+    var req;
+    try{ req=window.indexedDB.open(_BOOT_DB_NAME, 1); }
+    catch(e){ reject(e); return; }
+    req.onupgradeneeded=function(){
+      var db=req.result;
+      if(!db.objectStoreNames.contains(_BOOT_DB_STORE)) db.createObjectStore(_BOOT_DB_STORE);
+    };
+    req.onsuccess=function(){ resolve(req.result); };
+    req.onerror=function(){ reject(req.error||new Error('IndexedDB unavailable')); };
+  });
+}
+function _readPersistentBootCache(){
+  return _openBootCacheDB().then(function(db){
+    if(!db) return null;
+    return new Promise(function(resolve, reject){
+      var tx=db.transaction(_BOOT_DB_STORE,'readonly');
+      var req=tx.objectStore(_BOOT_DB_STORE).get(_BOOT_DB_KEY);
+      req.onsuccess=function(){ var value=req.result||null; db.close(); resolve(value); };
+      req.onerror=function(){ db.close(); reject(req.error||new Error('IndexedDB read failed')); };
+    });
+  });
+}
+function _savePersistentBootCache(payload){
+  return _openBootCacheDB().then(function(db){
+    if(!db) return false;
+    return new Promise(function(resolve, reject){
+      var tx=db.transaction(_BOOT_DB_STORE,'readwrite');
+      tx.objectStore(_BOOT_DB_STORE).put(payload,_BOOT_DB_KEY);
+      tx.oncomplete=function(){ db.close(); resolve(true); };
+      tx.onerror=function(){ db.close(); reject(tx.error||new Error('IndexedDB write failed')); };
+      tx.onabort=function(){ db.close(); reject(tx.error||new Error('IndexedDB write aborted')); };
+    });
+  });
+}
+function _saveBootCache(data){
+  var payload={data:data,ts:Date.now()};
+  try{ localStorage.setItem('rpac_boot_cache', JSON.stringify(payload)); }catch(e){}
+  _savePersistentBootCache(payload).catch(function(){});
+}
+
+async function bootApp(){
   // ── Stale-While-Revalidate boot ────────────────────────────
   // Mục tiêu: hiện app ngay từ cache, fetch mới ngầm trong nền
   // Chỉ block UI (overlay) khi thực sự không có cache nào
@@ -1492,6 +1541,9 @@ function bootApp(){
   var STALE_TTL  = 30 * 24 * 60 * 60 * 1000; // < 30 ngày → vào app ngay, tải dữ liệu mới ngầm
   var cached = null;
   try{ cached = JSON.parse(localStorage.getItem('rpac_boot_cache')||'null'); }catch(e){}
+  if(!cached){
+    try{ cached = await _readPersistentBootCache(); }catch(e){}
+  }
 
   var cacheAge = cached ? (Date.now() - (cached.ts||0)) : Infinity;
 
@@ -1521,9 +1573,7 @@ function bootApp(){
     _buildMachineList(data.machineList||[]);
     renderProcessInstruction();
     if(!fromCache) startPAPolling();
-    try{
-      localStorage.setItem('rpac_boot_cache', JSON.stringify({data:data, ts:Date.now()}));
-    }catch(e){}
+    _saveBootCache(data);
   }
 
   // ── Hàm fetch từ GAS ──
@@ -1607,9 +1657,7 @@ function doRefreshData(){
       buildDropdowns();
       _buildMachineList(data.machineList||[]);
       renderProcessInstruction();
-      try{
-        localStorage.setItem('rpac_boot_cache', JSON.stringify({data:data, ts:Date.now()}));
-      }catch(e){}
+      _saveBootCache(data);
       var now=new Date();
       var timeStr=now.getHours()+':'+('0'+now.getMinutes()).slice(-2);
       showToast('✅ Dữ liệu đã cập nhật lúc '+timeStr,'ok',4000);
