@@ -1489,7 +1489,7 @@ function bootApp(){
   // Mục tiêu: hiện app ngay từ cache, fetch mới ngầm trong nền
   // Chỉ block UI (overlay) khi thực sự không có cache nào
   var FRESH_TTL  = 4  * 60 * 60 * 1000; // < 4h  → dùng cache, fetch ngầm yên lặng
-  var STALE_TTL  = 7  * 24 * 60 * 60 * 1000; // < 7 ngày → dùng cache, fetch ngầm + toast
+  var STALE_TTL  = 30 * 24 * 60 * 60 * 1000; // < 30 ngày → vào app ngay, tải dữ liệu mới ngầm
   var cached = null;
   try{ cached = JSON.parse(localStorage.getItem('rpac_boot_cache')||'null'); }catch(e){}
 
@@ -1516,6 +1516,7 @@ function bootApp(){
     S.boot = data;
     _soUppCache = null;
     _syncPARowsFromBoot();
+    if(S.selectedSOs && S.selectedSOs.length) _renderPABox();
     buildDropdowns();
     _buildMachineList(data.machineList||[]);
     renderProcessInstruction();
@@ -1589,8 +1590,8 @@ function doRefreshData(){
   if(btn) btn.style.opacity='0.5';
   if(txt) txt.textContent='Đang tải...';
 
-  // Xóa cache cũ trước khi fetch — đảm bảo luôn lấy data mới nhất
-  try{ localStorage.removeItem('rpac_boot_cache'); }catch(e){}
+  // Giữ cache tốt gần nhất cho đến khi server trả dữ liệu mới thành công.
+  // Nếu mạng/GAS tạm chậm hoặc lỗi, lần mở app sau vẫn có thể vào ngay.
 
   gasGetAppData(
     function(data){
@@ -1602,6 +1603,7 @@ function doRefreshData(){
       }
       S.boot=data; _soUppCache=null;
       _syncPARowsFromBoot();
+      if(S.selectedSOs && S.selectedSOs.length) _renderPABox();
       buildDropdowns();
       _buildMachineList(data.machineList||[]);
       renderProcessInstruction();
