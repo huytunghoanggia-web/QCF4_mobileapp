@@ -3488,7 +3488,9 @@ var _paPollActive  = false;
 var _PA_POLL_MS    = 10000; // 10 giây
 var _paKnownKeys   = {};    // { rowIndex+'_'+remark : true } — đã thấy rồi
 var _holdRemindTimer = null;
-var _HOLD_REMIND_MS  = 2 * 60 * 60 * 1000; // 2 tiếng
+var _HOLD_ALERT_AFTER_MS  = 2 * 60 * 60 * 1000; // Cảnh báo lần đầu khi Hold quá 2 tiếng
+var _HOLD_ALERT_REPEAT_MS = 2 * 60 * 60 * 1000; // Nhắc lại mỗi 2 tiếng
+var _HOLD_ALERT_CACHE_KEY = 'rpac_hold_alert_slots';
 
 function startPAPolling(){
   if(_paPollActive) return;
@@ -3538,6 +3540,7 @@ function _doPAPoll(){
           _paUnholdedLocal = {};
           if(S.boot) S.boot.payAttention = newRows;
           if(S.selectedSOs && S.selectedSOs.length) _renderPABox();
+          _scheduleHoldRemind(700);
 
           // Lần đồng bộ đầu chỉ ghi nhận các ghi chú đang tồn tại, không làm đầy màn hình.
           if(isInitialBaseline){
@@ -3556,16 +3559,8 @@ function _doPAPoll(){
               if(oldRows[j].rowIndex===nr.rowIndex && oldRows[j].remark===nr.remark){ isNew=false; break; }
             }
             if(!isNew) return;
-
-            var author = (nr.authorEmail||'').split('@')[0] || 'QC';
-            if(nr.remarkType === 'HOLD'){
-              showNotif('n-hold','🚫',
-                'Hold mới từ ' + author,
-                'SO: '+(nr.so||'')+(nr.itemCode?' · '+nr.itemCode:'')+' — '+nr.remark,
-                10000);
-            } else {
-              // Ghi chú thường được cập nhật vào vùng Pay Attention, không hiện popup.
-            }
+            // HOLD mới vẫn hiện trong vùng Pay Attention; popup chỉ do bộ đếm quá hạn tạo ra.
+            if(nr.remarkType === 'HOLD'){}
           });
 
           // Đánh dấu known cho cả oldRows lần đầu
@@ -3585,46 +3580,75 @@ function _doPAPoll(){
     function(){ _schedulePAPoll(); });
 }
 
-// ── HOLD remind mỗi 2 tiếng ──
-function _scheduleHoldRemind(){
+// ── HOLD overdue reminder ─────────────────────────────────────────────
+function _holdStartedAtMs(h){
+  if(!h||!h.authorTs) return 0;
+  try{
+    var parts=String(h.authorTs).split(' ');
+    var dp=(parts[0]||'').split('/');
+    var tp=(parts[1]||'').split(':');
+    if(dp.length!==3||tp.length<2) return 0;
+    var dt=new Date(+dp[2],+dp[1]-1,+dp[0],+tp[0],+tp[1],+(tp[2]||0));
+    return isNaN(dt.getTime())?0:dt.getTime();
+  }catch(e){return 0;}
+}
+function _holdAlertId(h){
+  return String(h.rowIndex||'')+'|'+String(h.authorTs||'')+'|'+String(h.remark||'');
+}
+function _loadHoldAlertSlots(){
+  try{return JSON.parse(localStorage.getItem(_HOLD_ALERT_CACHE_KEY)||'{}')||{};}catch(e){return {};}
+}
+function _saveHoldAlertSlots(slots){
+  try{localStorage.setItem(_HOLD_ALERT_CACHE_KEY,JSON.stringify(slots||{}));}catch(e){}
+}
+function _scheduleHoldRemind(delay){
   if(!_paPollActive) return;
   clearTimeout(_holdRemindTimer);
-  _holdRemindTimer = setTimeout(_doHoldRemind, _HOLD_REMIND_MS);
+  var wait=(typeof delay==='number'&&delay>=0)?delay:800;
+  _holdRemindTimer=setTimeout(_doHoldRemind,wait);
 }
 function _doHoldRemind(){
   if(!_paPollActive) return;
-  var activeHolds = _paRows.filter(function(r){ return r.remarkType==='HOLD' && !r.unholdReason; });
-  if(activeHolds.length){
-    activeHolds.forEach(function(h){
-      // Tính thời gian đã hold
-      var elapsed = '';
-      if(h.authorTs){
-        try{
-          // authorTs dạng "dd/MM/yyyy HH:mm:ss"
-          var parts = h.authorTs.split(' ');
-          var dp = (parts[0]||'').split('/');
-          var tp = (parts[1]||'').split(':');
-          if(dp.length===3 && tp.length>=2){
-            var holdDate = new Date(+dp[2], +dp[1]-1, +dp[0], +tp[0], +tp[1], +(tp[2]||0));
-            var diffMs = Date.now() - holdDate.getTime();
-            if(diffMs > 0){
-              var diffH = Math.floor(diffMs / 3600000);
-              var diffM = Math.floor((diffMs % 3600000) / 60000);
-              elapsed = diffH > 0 ? diffH + ' tiếng' + (diffM > 0 ? ' '+diffM+' phút' : '') : diffM + ' phút';
-            }
-          }
-        }catch(e){}
+  var now=Date.now();
+  var activeHolds=_paRows.filter(function(r){return r.remarkType==='HOLD'&&!r.unholdReason;});
+  var slots=_loadHoldAlertSlots(),activeIds={},slotsChanged=false;
+  var nextAt=0;
+
+  activeHolds.forEach(function(h){
+    var startedAt=_holdStartedAtMs(h);
+    if(!startedAt) return;
+    var id=_holdAlertId(h);
+    activeIds[id]=true;
+    var dueAt=startedAt+_HOLD_ALERT_AFTER_MS;
+
+    if(now>=dueAt){
+      var slot=Math.floor((now-dueAt)/_HOLD_ALERT_REPEAT_MS);
+      if(Number(slots[id])!==slot){
+        var elapsedMs=now-startedAt;
+        var elapsedH=Math.floor(elapsedMs/3600000);
+        var elapsedM=Math.floor((elapsedMs%3600000)/60000);
+        var elapsed=elapsedH+' tiếng'+(elapsedM?' '+elapsedM+' phút':'');
+        showNotif('n-hold-remind','⚠️',
+          'Đơn hàng HOLD đã quá thời gian quy định',
+          'SO: '+(h.so||'')+(h.itemCode?' · '+h.itemCode:'')+
+          ' · HOLD '+elapsed+' · '+h.remark,
+          10000);
+        slots[id]=slot;
+        slotsChanged=true;
       }
-      var author = (h.authorEmail||'').split('@')[0] || 'QC';
-      showNotif('n-hold-remind','⚠️',
-        '🔴 Đơn hàng đang bị HOLD' + (elapsed ? ' — ' + elapsed : ''),
-        'SO: '+(h.so||'')+(h.itemCode?' · '+h.itemCode:'')+
-        ' · Lý do: '+h.remark+
-        ' · Hãy chú ý xử lý tránh bị delay!',
-        0); // 0 = không tự tắt
-    });
-  }
-  _scheduleHoldRemind(); // lên lịch lần tiếp
+      var repeatAt=dueAt+(slot+1)*_HOLD_ALERT_REPEAT_MS;
+      nextAt=!nextAt?repeatAt:Math.min(nextAt,repeatAt);
+    } else {
+      nextAt=!nextAt?dueAt:Math.min(nextAt,dueAt);
+    }
+  });
+
+  Object.keys(slots).forEach(function(id){
+    if(!activeIds[id]){delete slots[id];slotsChanged=true;}
+  });
+  if(slotsChanged) _saveHoldAlertSlots(slots);
+
+  _scheduleHoldRemind(nextAt?Math.max(1000,nextAt-Date.now()):_HOLD_ALERT_REPEAT_MS);
 }
 
 // ── Hiện notification banner ──
