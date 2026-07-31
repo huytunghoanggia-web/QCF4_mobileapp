@@ -3564,10 +3564,7 @@ function _doPAPoll(){
                 'SO: '+(nr.so||'')+(nr.itemCode?' · '+nr.itemCode:'')+' — '+nr.remark,
                 10000);
             } else {
-              showNotif('n-note','📣',
-                'Ghi chú mới từ ' + author,
-                'SO: '+(nr.so||'')+(nr.itemCode?' · '+nr.itemCode:'')+' — '+nr.remark,
-                8000);
+              // Ghi chú thường được cập nhật vào vùng Pay Attention, không hiện popup.
             }
           });
 
