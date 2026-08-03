@@ -1598,11 +1598,14 @@ async function bootApp(){
 
   // ── Hàm apply data vào app (dùng chung cho cache và network) ──
   function _applyBootData(data, fromCache){
+    var processBeforeRefresh=_currentProcessSelection();
     S.boot = data;
     _soUppCache = null;
     _syncPARowsFromBoot();
     if(S.selectedSOs && S.selectedSOs.length) _renderPABox();
+    if(processBeforeRefresh) S.process=processBeforeRefresh;
     buildDropdowns();
+    _restoreProcessSelection(processBeforeRefresh);
     _buildMachineList(data.machineList||[]);
     renderProcessInstruction();
     if(!fromCache) startPAPolling();
@@ -1668,6 +1671,9 @@ function doRefreshData(){
     showToast('📴 Không có mạng — không thể cập nhật','er',3000);
     return;
   }
+  // Keep the in-progress Process through this explicit, user-triggered refresh.
+  // Do not call onProcChange here because it intentionally clears dependent inputs.
+  var processBeforeRefresh=_currentProcessSelection();
   var btn=document.getElementById('chipRefresh');
   var txt=document.getElementById('refreshTxt');
   if(btn) btn.style.opacity='0.5';
@@ -1684,10 +1690,14 @@ function doRefreshData(){
         showToast('⚠️ Không tải được dữ liệu: '+(data&&data.error||'lỗi'),'er',4000);
         return;
       }
+      // Always use the latest user selection. A deliberate clear must stay clear.
+      var processToKeep=_currentProcessSelection();
       S.boot=data; _soUppCache=null;
       _syncPARowsFromBoot();
       if(S.selectedSOs && S.selectedSOs.length) _renderPABox();
+      if(processToKeep) S.process=processToKeep;
       buildDropdowns();
+      _restoreProcessSelection(processToKeep);
       _buildMachineList(data.machineList||[]);
       renderProcessInstruction();
       _saveBootCache(data);
@@ -1721,6 +1731,19 @@ function startClock(){
 // ══════════════════════════════════════════════════════════════
 // DROPDOWNS
 // ══════════════════════════════════════════════════════════════
+function _currentProcessSelection(){
+  var pSel=document.getElementById('procSelect');
+  return String(S.process||(pSel?pSel.value:'')||'').trim();
+}
+
+function _restoreProcessSelection(process){
+  var keep=String(process||'').trim();
+  if(!keep) return;
+  S.process=keep;
+  var pSel=document.getElementById('procSelect');
+  if(pSel) pSel.value=keep;
+}
+
 function buildDropdowns(){
   var ps=(S.boot&&S.boot.processes)?S.boot.processes:[];
   var pSel=document.getElementById('procSelect');
@@ -1730,7 +1753,10 @@ function buildDropdowns(){
   if(selectedProc&&formProcs.indexOf(selectedProc)<0) formProcs.unshift(selectedProc);
   var phtml='<option value="">-- Chọn công đoạn --</option>';
   formProcs.forEach(function(p){phtml+='<option value="'+esc(p)+'"'+(p===selectedProc?' selected':'')+'>'+esc(p)+'</option>';});
-  if(pSel) pSel.innerHTML=phtml;
+  if(pSel){
+    pSel.innerHTML=phtml;
+    if(selectedProc) pSel.value=selectedProc;
+  }
 
   var hpSel=document.getElementById('hProc');
   var selectedHistoryProc=hpSel?hpSel.value||'':'';
@@ -1738,7 +1764,10 @@ function buildDropdowns(){
   if(selectedHistoryProc&&historyProcs.indexOf(selectedHistoryProc)<0) historyProcs.unshift(selectedHistoryProc);
   var hphtml='<option value="">Tất cả công đoạn</option>';
   historyProcs.forEach(function(p){hphtml+='<option value="'+esc(p)+'"'+(p===selectedHistoryProc?' selected':'')+'>'+esc(p)+'</option>';});
-  if(hpSel) hpSel.innerHTML=hphtml;
+  if(hpSel){
+    hpSel.innerHTML=hphtml;
+    if(selectedHistoryProc) hpSel.value=selectedHistoryProc;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
