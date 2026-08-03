@@ -1724,11 +1724,21 @@ function startClock(){
 function buildDropdowns(){
   var ps=(S.boot&&S.boot.processes)?S.boot.processes:[];
   var pSel=document.getElementById('procSelect');
-  pSel.innerHTML='<option value="">-- Chọn công đoạn --</option>';
-  ps.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;pSel.appendChild(o);});
+  // A refresh can change master data, but never removes the Process of a check in progress.
+  var selectedProc=S.process||(pSel?pSel.value:'')||'';
+  var formProcs=ps.slice();
+  if(selectedProc&&formProcs.indexOf(selectedProc)<0) formProcs.unshift(selectedProc);
+  var phtml='<option value="">-- Chọn công đoạn --</option>';
+  formProcs.forEach(function(p){phtml+='<option value="'+esc(p)+'"'+(p===selectedProc?' selected':'')+'>'+esc(p)+'</option>';});
+  if(pSel) pSel.innerHTML=phtml;
+
   var hpSel=document.getElementById('hProc');
-  hpSel.innerHTML='<option value="">Tất cả công đoạn</option>';
-  ps.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;hpSel.appendChild(o);});
+  var selectedHistoryProc=hpSel?hpSel.value||'':'';
+  var historyProcs=ps.slice();
+  if(selectedHistoryProc&&historyProcs.indexOf(selectedHistoryProc)<0) historyProcs.unshift(selectedHistoryProc);
+  var hphtml='<option value="">Tất cả công đoạn</option>';
+  historyProcs.forEach(function(p){hphtml+='<option value="'+esc(p)+'"'+(p===selectedHistoryProc?' selected':'')+'>'+esc(p)+'</option>';});
+  if(hpSel) hpSel.innerHTML=hphtml;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3044,10 +3054,16 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
 },300);}
 var _machineList = [];
 function _machineOptionsHTML(selected){
-  selected=selected||'';
+  selected=String(selected||'').trim();
   var html='<option value="">-- Chọn máy --</option>';
+  // Keep the active machine visible even if its master entry was changed during this check.
+  var hasSelected=false;
   for(var i=0;i<_machineList.length;i++){
-    var m=String(_machineList[i]||'').trim();
+    if(String(_machineList[i]||'').trim()===selected){hasSelected=true;break;}
+  }
+  if(selected&&!hasSelected) html+='<option value="'+esc(selected)+'" selected>'+esc(selected)+'</option>';
+  for(var j=0;j<_machineList.length;j++){
+    var m=String(_machineList[j]||'').trim();
     if(!m) continue;
     html+='<option value="'+esc(m)+'"'+(m===selected?' selected':'')+'>'+esc(m)+'</option>';
   }
