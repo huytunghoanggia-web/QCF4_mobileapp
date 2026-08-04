@@ -1492,17 +1492,21 @@ var _BOOT_DB_STORE = 'boot';
 var _BOOT_DB_KEY = 'latest';
 var _HIST_DB_STORE = 'history';
 var _HIST_DB_KEY = 'recent200';
+var _QUEUE_DB_STORE = 'queue';
+var _QUEUE_DB_KEY = 'pending';
+var _queueWriteChain = Promise.resolve(true);
 
 function _openBootCacheDB(){
   return new Promise(function(resolve, reject){
     if(!window.indexedDB){ resolve(null); return; }
     var req;
-    try{ req=window.indexedDB.open(_BOOT_DB_NAME, 2); }
+    try{ req=window.indexedDB.open(_BOOT_DB_NAME, 3); }
     catch(e){ reject(e); return; }
     req.onupgradeneeded=function(){
       var db=req.result;
       if(!db.objectStoreNames.contains(_BOOT_DB_STORE)) db.createObjectStore(_BOOT_DB_STORE);
       if(!db.objectStoreNames.contains(_HIST_DB_STORE)) db.createObjectStore(_HIST_DB_STORE);
+      if(!db.objectStoreNames.contains(_QUEUE_DB_STORE)) db.createObjectStore(_QUEUE_DB_STORE);
     };
     req.onsuccess=function(){ resolve(req.result); };
     req.onerror=function(){ reject(req.error||new Error('IndexedDB unavailable')); };
@@ -1557,6 +1561,34 @@ function _savePersistentHistoryCache(payload){
       tx.oncomplete=function(){ db.close(); resolve(true); };
       tx.onerror=function(){ db.close(); reject(tx.error||new Error('History cache write failed')); };
       tx.onabort=function(){ db.close(); reject(tx.error||new Error('History cache write aborted')); };
+    });
+  });
+}
+function _normalizeQueuePayload(value){
+  if(Array.isArray(value)) return {queue:value,ts:0};
+  if(value&&Array.isArray(value.queue)) return {queue:value.queue,ts:Number(value.ts)||0};
+  return null;
+}
+function _readPersistentQueue(){
+  return _openBootCacheDB().then(function(db){
+    if(!db) return null;
+    return new Promise(function(resolve, reject){
+      var tx=db.transaction(_QUEUE_DB_STORE,'readonly');
+      var req=tx.objectStore(_QUEUE_DB_STORE).get(_QUEUE_DB_KEY);
+      req.onsuccess=function(){ var value=_normalizeQueuePayload(req.result||null); db.close(); resolve(value); };
+      req.onerror=function(){ db.close(); reject(req.error||new Error('Queue read failed')); };
+    });
+  });
+}
+function _savePersistentQueue(payload){
+  return _openBootCacheDB().then(function(db){
+    if(!db) return false;
+    return new Promise(function(resolve, reject){
+      var tx=db.transaction(_QUEUE_DB_STORE,'readwrite');
+      tx.objectStore(_QUEUE_DB_STORE).put(payload,_QUEUE_DB_KEY);
+      tx.oncomplete=function(){ db.close(); resolve(true); };
+      tx.onerror=function(){ db.close(); reject(tx.error||new Error('Queue write failed')); };
+      tx.onabort=function(){ db.close(); reject(tx.error||new Error('Queue write aborted')); };
     });
   });
 }
@@ -1899,11 +1931,32 @@ function updateNetUI(){
   if(ob) ob.style.display=S.online?'none':'flex';
   // Nút refresh luôn hiển thị
 }
-function loadQueue(){try{S.queue=JSON.parse(localStorage.getItem(QKEY)||'[]');}catch(e){S.queue=[];}updateQueueUI();}
-function saveQueue(){
-  try{localStorage.setItem(QKEY,JSON.stringify(S.queue));}catch(e){}
+function loadQueue(){
+  var localPayload=null;
+  try{localPayload=_normalizeQueuePayload(JSON.parse(localStorage.getItem(QKEY)||'null'));}catch(e){}
+  S.queue=localPayload?localPayload.queue:[];
   updateQueueUI();
-  if(S.online && S.queue.length>0 && !_syncInProgress) _scheduleAutoSync(1500, false);
+  _readPersistentQueue().then(function(dbPayload){
+    if(dbPayload&&(!localPayload||dbPayload.ts>=localPayload.ts)) S.queue=dbPayload.queue;
+    else if(localPayload&&!dbPayload) _savePersistentQueue(localPayload).catch(function(){});
+    updateQueueUI();
+    if(S.online&&S.queue.length>0&&!_syncInProgress) _scheduleAutoSync(1500,false);
+  }).catch(function(){});
+}
+function saveQueue(){
+  var payload,localOk=false;
+  try{payload={queue:JSON.parse(JSON.stringify(S.queue)),ts:Date.now()};}
+  catch(e){updateQueueUI();return Promise.resolve(false);}
+  try{localStorage.setItem(QKEY,JSON.stringify(payload));localOk=true;}catch(e){}
+  updateQueueUI();
+  _queueWriteChain=_queueWriteChain.catch(function(){return false;}).then(function(){
+    return _savePersistentQueue(payload).then(function(){return true;}).catch(function(){return false;});
+  });
+  return _queueWriteChain.then(function(idbOk){
+    var durable=localOk||idbOk;
+    if(durable&&S.online&&S.queue.length>0&&!_syncInProgress) _scheduleAutoSync(1500,false);
+    return durable;
+  });
 }
 function updateQueueUI(){
   var n=S.queue.length;
@@ -2139,7 +2192,8 @@ function goToB(){
   if(!proc){showToast('⚠️ Chọn công đoạn','er');return;}
   if(!S.boot||!S.boot.itemsByProcess){showToast('⚠️ Dữ liệu chưa tải xong','er');return;}
   // Bắt buộc Operator ID + Machine chỉ khi chế độ Kiểm tra (không phải Unhold/Ghi chú)
-  if(_mode==='check'){
+  var isFinalProcess=proc.toLowerCase().indexOf('final')>=0;
+  if(_mode==='check'&&!isFinalProcess){
     if(!S.operatorId){
       showToast('⚠️ Nhập Operator ID trước khi kiểm tra','er');
       var oi=document.getElementById('operatorIdInp');if(oi){oi.focus();oi.style.borderColor='var(--ng)';setTimeout(function(){oi.style.borderColor='';},1800);}
@@ -2647,7 +2701,7 @@ function uniq(a){return a.filter(function(v,i,ar){return ar.indexOf(v)===i;});}
 // SAVE
 // ══════════════════════════════════════════════════════════════
 var _isSaving = false; // guard chống double-tap nút Lưu
-function doSave(){
+async function doSave(){
   if(_isSaving){ showToast('⏳ Đang lưu, vui lòng chờ...','',1500); return; }
   _isSaving = true;
   var empty=0;
@@ -2657,7 +2711,7 @@ function doSave(){
     else if(it.isDim)it.dimRows.forEach(function(r){if(!r.result)empty++;});
     else if(!it.result)empty++;
   });
-  if(empty>0&&!confirm('Còn '+empty+' hạng mục chưa có kết quả. Vẫn lưu?'))return;
+  if(empty>0&&!confirm('Còn '+empty+' hạng mục chưa có kết quả. Vẫn lưu?')){_isSaving=false;return;}
   var now=new Date(),soMap=getSOMap();
   // Gom tất cả SO thành 1 payload duy nhất
   var soJoinedF=S.selectedSOs.join(', ');
@@ -2694,8 +2748,17 @@ function doSave(){
   }];
   var nSaved=results.length;
   // Push 1 payload duy nhất — KHÔNG push array lớn
-  S.queue.push(payloads[0]); saveQueue();
-  _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length);
+  S.queue.push(payloads[0]);
+  var queueSaved=await saveQueue();
+  if(!queueSaved){
+    var failedQueueIndex=S.queue.indexOf(payloads[0]);
+    if(failedQueueIndex>=0)S.queue.splice(failedQueueIndex,1);
+    updateQueueUI();
+    _isSaving=false;
+    showToast('Khong the luu an toan tren thiet bi. Kiem tra dung luong roi thu lai.','er',6000);
+    return;
+  }
+  _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length,sessionId);
   _isSaving = false; // reset guard sau khi đã push vào queue thành công
   showDone(nSaved,!S.online);
   if(S.online)_bgSyncQueue();
@@ -2851,12 +2914,12 @@ function showDone(saved,offline){
   showScreen('D');
 }
 
-function _injectSessionToHistory(ic,lc,okN,ngN,naN){
+function _injectSessionToHistory(ic,lc,okN,ngN,naN,sessionId){
   var soArr=S.selectedSOs.slice();var soJoined=soArr.join(', ');var soDisp=soArr.length>1?soArr[0]+' +'+(soArr.length-1):soArr[0];
   var now=new Date();var dateStr=_padC(now.getDate())+'/'+_padC(now.getMonth()+1)+'/'+now.getFullYear();var timeStr=_padC(now.getHours())+':'+_padC(now.getMinutes())+':'+_padC(now.getSeconds());
   var items=[];S.items.forEach(function(it){if(it.isDelta){it.dRows.forEach(function(r){items.push({itemcheck:it.itemcheck+' — '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});}else if(it.isDim){it.dimRows.forEach(function(r){items.push({itemcheck:it.itemcheck+' — '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});}else{items.push({itemcheck:it.itemcheck,result:it.result||'',value:it.value||'',note:it.note||'',photo:''});}});
   // Tìm sessionId từ queue item vừa thêm (item cuối cùng trong queue)
-  var _sid = (S.queue.length && S.queue[S.queue.length-1]._sessionId) ? S.queue[S.queue.length-1]._sessionId : ('LOC_'+now.getTime());
+  var _sid = sessionId||('LOC_'+now.getTime());
   var sess={so:soJoined,soArr:soArr,soDisplay:soDisp,itemCode:ic,localCustomer:lc,
     process:S.process,inspector:S.email,operatorId:S.operatorId||'',machine:S.machine||'',
     date:dateStr,time:timeStr,tsNum:now.getTime(),
@@ -3449,6 +3512,11 @@ function _renderNoteScope(){
   setRow('scopeRowSO','scopeValSO',_noteScope.SO,soTxt||'Chưa chọn SO');setRow('scopeRowIC','scopeValIC',_noteScope.IC,ic);setRow('scopeRowLC','scopeValLC',_noteScope.LC,lc);
 }
 (function(){var orig=window.renderSOChips;window.renderSOChips=function(){orig&&orig();if(_mode==='note')_renderNoteScope();};})();
+var _noteSaving=false;
+function _setNoteSaving(on){
+  var btn=document.getElementById('btnGoToB');
+  if(btn)btn.disabled=!!on;
+}
 function savePayAttention(ok,err){
   var soMap=getSOMap();
   function getMeta(so){var d=soMap[so]||{};var m=S.soMeta[so]||{};return{itemCode:d.itemCode||m.itemCode||'',localCustomer:d.localCustomer||m.localCustomer||(m.lc||'')};}
@@ -3457,8 +3525,16 @@ function savePayAttention(ok,err){
   if(!_noteScope.SO&&!_noteScope.IC&&!_noteScope.LC){showToast('⚠️ Chọn ít nhất 1 mục tác động','er');return;}
   var photoB64=_notePhotoBase64||'',photoNm=_notePhotoName||'';
   var rows=[];sos.forEach(function(so){var meta=getMeta(so);rows.push({so:_noteScope.SO?so:'',itemCode:_noteScope.IC?meta.itemCode:'',localCustomer:_noteScope.LC?meta.localCustomer:'',remark:remark,email:S.email,timestamp:new Date().toISOString(),photoBase64:photoB64,photoName:photoNm});});
-  _resetNoteMode();setMode('check');showToast('📝 Đã lưu ghi chú','ok');
-  _gasCall('savePayAttention',{rows:rows},function(r){if(!r||!r.ok)showToast('⚠️ Ghi chú lưu thất bại: '+(r&&r.error||'lỗi'),'er');},function(){showToast('⚠️ Ghi chú lưu thất bại','er');});
+  if(_noteSaving)return;
+  _noteSaving=true;_setNoteSaving(true);
+  _gasCall('savePayAttention',{rows:rows},function(r){
+    _noteSaving=false;_setNoteSaving(false);
+    if(!r||!r.ok){showToast('Ghi chu chua luu duoc. Noi dung van duoc giu lai.','er',5000);return;}
+    _resetNoteMode();setMode('check');showToast('Da luu ghi chu','ok');
+  },function(){
+    _noteSaving=false;_setNoteSaving(false);
+    showToast('Ghi chu chua luu duoc. Noi dung van duoc giu lai.','er',5000);
+  });
 }
 function addNotePhoto(input){
   var f=input.files[0]; if(!f)return;
