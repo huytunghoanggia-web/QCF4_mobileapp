@@ -1059,6 +1059,11 @@ input[type=file]{display:none}
             <div class="note-scope-tag">Customer</div>
             <div class="note-scope-val" id="scopeValLC"><span class="note-scope-empty">—</span></div>
           </div>
+          <div class="note-scope-row" id="scopeRowPR" onclick="toggleNoteScope('PR')">
+            <div class="note-scope-cb"></div>
+            <div class="note-scope-tag">Program</div>
+            <div class="note-scope-val" id="scopeValPR"><span class="note-scope-empty">—</span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1631,13 +1636,16 @@ async function bootApp(){
   // ── Hàm apply data vào app (dùng chung cho cache và network) ──
   function _applyBootData(data, fromCache){
     var processBeforeRefresh=_currentProcessSelection();
+    var processVersionBeforeRefresh=_processSelectionVersion;
     S.boot = data;
     _soUppCache = null;
     _syncPARowsFromBoot();
     if(S.selectedSOs && S.selectedSOs.length) _renderPABox();
-    if(processBeforeRefresh) S.process=processBeforeRefresh;
+    var processToKeep=_currentProcessSelection();
+    if(!processToKeep&&processBeforeRefresh&&_processSelectionVersion===processVersionBeforeRefresh) processToKeep=processBeforeRefresh;
+    if(processToKeep) S.process=processToKeep;
     buildDropdowns();
-    _restoreProcessSelection(processBeforeRefresh);
+    _restoreProcessSelection(processToKeep);
     _buildMachineList(data.machineList||[]);
     renderProcessInstruction();
     if(!fromCache) startPAPolling();
@@ -1706,6 +1714,7 @@ function doRefreshData(){
   // Keep the in-progress Process through this explicit, user-triggered refresh.
   // Do not call onProcChange here because it intentionally clears dependent inputs.
   var processBeforeRefresh=_currentProcessSelection();
+  var processVersionBeforeRefresh=_processSelectionVersion;
   var btn=document.getElementById('chipRefresh');
   var txt=document.getElementById('refreshTxt');
   if(btn) btn.style.opacity='0.5';
@@ -1722,8 +1731,9 @@ function doRefreshData(){
         showToast('⚠️ Không tải được dữ liệu: '+(data&&data.error||'lỗi'),'er',4000);
         return;
       }
-      // Always use the latest user selection. A deliberate clear must stay clear.
+      // Keep the latest user selection. If no selection event occurred, use the click snapshot as a safety fallback.
       var processToKeep=_currentProcessSelection();
+      if(!processToKeep&&processBeforeRefresh&&_processSelectionVersion===processVersionBeforeRefresh) processToKeep=processBeforeRefresh;
       S.boot=data; _soUppCache=null;
       _syncPARowsFromBoot();
       if(S.selectedSOs && S.selectedSOs.length) _renderPABox();
@@ -1763,6 +1773,7 @@ function startClock(){
 // ══════════════════════════════════════════════════════════════
 // DROPDOWNS
 // ══════════════════════════════════════════════════════════════
+var _processSelectionVersion=0;
 function _currentProcessSelection(){
   var pSel=document.getElementById('procSelect');
   return String(S.process||(pSel?pSel.value:'')||'').trim();
@@ -2076,6 +2087,7 @@ function renderSODD(raw){
     var d=soMap[s]||{};
     if(d.itemCode&&d.itemCode.toUpperCase().indexOf(qUp)>=0)return true;
     if(d.localCustomer&&d.localCustomer.toUpperCase().indexOf(qUp)>=0)return true;
+    if(_mode==='note'&&d.program&&d.program.toUpperCase().indexOf(qUp)>=0)return true;
     return false;
   }):all;
   var shown=filtered.slice(0,MAX);
@@ -2085,7 +2097,7 @@ function renderSODD(raw){
   if(!shown.length){parts.push('<div class="so-none">Không tìm thấy SO nào</div>');}
   else{
     for(var i=0;i<shown.length;i++){
-      var so=shown[i],d=soMap[so]||{},sub=[d.itemCode,d.localCustomer].filter(Boolean).join(' · ');
+      var so=shown[i],d=soMap[so]||{},sub=[d.itemCode,d.localCustomer].concat(_mode==='note'?[d.program]:[]).filter(Boolean).join(' · ');
       parts.push('<div class="so-item'+(selSet[so]?' sel':'')+'" data-so="'+esc(so)+'">'
         +'<div class="so-item-radio"></div>'
         +'<div class="so-item-body"><div>'+hlText(so,q)+'</div>'+(sub?'<div class="so-item-sub">'+esc(sub)+'</div>':'')+'</div>'
@@ -2126,10 +2138,17 @@ function confirmManualSO(){
 function onManualSOInput(){document.getElementById('manualSO').style.borderColor='';}
 function onSOKey(e){if(e.key==='Enter'){e.preventDefault();var v=document.getElementById('soInput').value.trim().toUpperCase();if(!v)return;if(S.selectedSOs.indexOf(v)<0){S.selectedSOs.push(v);var soMap=getSOMap();if(!soMap[v])S.soMeta[v]={itemCode:'',localCustomer:'',manual:true};}document.getElementById('soInput').value='';renderSOChips();renderSODD('');}if(e.key==='Escape'){closeSODD();document.getElementById('soInput').blur();}}
 function toggleSO(so){var idx=S.selectedSOs.indexOf(so);if(idx>=0){S.selectedSOs.splice(idx,1);delete S.soMeta[so];}else{S.selectedSOs.push(so);var soMap=getSOMap();if(!soMap[so])S.soMeta[so]={itemCode:'',localCustomer:'',manual:true};}renderSOChips();closeSODD();var inp=document.getElementById('soInput');inp.value='';document.getElementById('soAddManualBtn').style.display='none';}
+function _resetCheckContextAfterLastSO(){
+  if(_mode!=='check'||S.selectedSOs.length) return;
+  S.items=[];
+  onProcChange('');
+  var pSel=document.getElementById('procSelect');if(pSel)pSel.value='';
+  var dup=document.getElementById('alertDup');if(dup)dup.classList.remove('on');
+}
 function renderSOChips(){
   var el=document.getElementById('soChips');
   _paUnholdedLocal={}; // reset unhold local state khi SO thay đổi
-  if(!S.selectedSOs.length){el.innerHTML='<span class="so-empty">Chưa chọn SO nào</span>';renderSOInfo();var pb=document.getElementById('paBox');if(pb){pb.innerHTML='';pb.classList.remove('on');}; _paUnblock();return;}
+  if(!S.selectedSOs.length){_resetCheckContextAfterLastSO();el.innerHTML='<span class="so-empty">Chưa chọn SO nào</span>';renderSOInfo();var pb=document.getElementById('paBox');if(pb){pb.innerHTML='';pb.classList.remove('on');}; _paUnblock();return;}
   var parts=S.selectedSOs.map(function(so){return'<div class="so-chip">'+esc(so)+'<span class="so-chip-x" data-del-so="'+esc(so)+'">×</span></div>';});
   el.innerHTML=parts.join('');renderSOInfo();checkPayAttention();
 }
@@ -2150,6 +2169,7 @@ function renderSOInfo(){
 // STEP A → B
 // ══════════════════════════════════════════════════════════════
 function onProcChange(val){
+  _processSelectionVersion++;
   S.process = val;
   S.operatorId=''; S.machine=''; S.lotQty=''; S.aqlQty=''; S.aqlAccept='';
   var oi=document.getElementById('operatorIdInp'); if(oi) oi.value='';
@@ -3489,7 +3509,7 @@ function driveViewUrl(url){if(!url)return'#';if(url.indexOf('data:image')===0)re
 // NOTE MODE
 // ══════════════════════════════════════════════════════════════
 var _mode='check';
-var _noteScope={SO:false,IC:false,LC:false};
+var _noteScope={SO:false,IC:false,LC:false,PR:false};
 function setMode(m){
   _mode=m;var isNote=(m==='note');
   document.getElementById('modeOptCheck').classList.toggle('on',!isNote);
@@ -3499,19 +3519,35 @@ function setMode(m){
   document.getElementById('procFieldWrap').style.display=isNote?'none':'';
   if(isNote){var pw=document.getElementById('procExtraWrap');if(pw)pw.style.display='none';}
   document.getElementById('alertDup').classList.remove('on');
-  if(isNote){_paUnblock();var pb=document.getElementById('paBox');if(pb){pb.style.display='none';}_noteScope={SO:false,IC:false,LC:false};_renderNoteScope();}
+  if(isNote){_paUnblock();var pb=document.getElementById('paBox');if(pb){pb.style.display='none';}_noteScope={SO:false,IC:false,LC:false,PR:false};_renderNoteScope();}
   else{var pb=document.getElementById('paBox');if(pb){pb.style.display='';}checkPayAttention();}
 }
-function toggleNoteScope(key){_noteScope[key]=!_noteScope[key];_renderNoteScope();}
+function toggleNoteScope(key){
+  if(key==='PR'){
+    var soMap=getSOMap();
+    var missing=(S.selectedSOs||[]).some(function(so){var d=soMap[so]||S.soMeta[so]||{};return !String(d.program||'').trim();});
+    if(missing){showToast('⚠️ SO đã chọn chưa có Program trong Database','er',3500);return;}
+  }
+  _noteScope[key]=!_noteScope[key];_renderNoteScope();
+}
 function _renderNoteScope(){
   var soMap=getSOMap();var sos=S.selectedSOs;
-  function getMeta(so){var d=soMap[so]||{};var m=S.soMeta[so]||{};return{itemCode:d.itemCode||m.itemCode||'',localCustomer:d.localCustomer||m.localCustomer||(m.lc||'')};}
-  var soTxt=sos.length?sos.join(', '):'';var ic='';var lc='';
-  if(sos.length){var allIC=sos.map(function(s){return getMeta(s).itemCode;}).filter(Boolean);var allLC=sos.map(function(s){return getMeta(s).localCustomer;}).filter(Boolean);ic=allIC.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');lc=allLC.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');}
+  function getMeta(so){var d=soMap[so]||{};var m=S.soMeta[so]||{};return{itemCode:d.itemCode||m.itemCode||'',localCustomer:d.localCustomer||m.localCustomer||(m.lc||''),program:d.program||m.program||''};}
+  var soTxt=sos.length?sos.join(', '):'';var ic='';var lc='';var pr='';
+  if(sos.length){
+    var allIC=sos.map(function(s){return getMeta(s).itemCode;}).filter(Boolean);
+    var allLC=sos.map(function(s){return getMeta(s).localCustomer;}).filter(Boolean);
+    var allPR=sos.map(function(s){return getMeta(s).program;}).filter(Boolean);
+    ic=allIC.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');
+    lc=allLC.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');
+    pr=allPR.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');
+  }
   function setRow(rowId,valId,on,txt){var row=document.getElementById(rowId);var val=document.getElementById(valId);if(!row||!val)return;row.classList.toggle('on',on);val.innerHTML=txt?esc(txt):'<span class="note-scope-empty">—</span>';}
-  setRow('scopeRowSO','scopeValSO',_noteScope.SO,soTxt||'Chưa chọn SO');setRow('scopeRowIC','scopeValIC',_noteScope.IC,ic);setRow('scopeRowLC','scopeValLC',_noteScope.LC,lc);
-}
-(function(){var orig=window.renderSOChips;window.renderSOChips=function(){orig&&orig();if(_mode==='note')_renderNoteScope();};})();
+  setRow('scopeRowSO','scopeValSO',_noteScope.SO,soTxt||'Chưa chọn SO');
+  setRow('scopeRowIC','scopeValIC',_noteScope.IC,ic);
+  setRow('scopeRowLC','scopeValLC',_noteScope.LC,lc);
+  setRow('scopeRowPR','scopeValPR',_noteScope.PR,pr);
+}(function(){var orig=window.renderSOChips;window.renderSOChips=function(){orig&&orig();if(_mode==='note')_renderNoteScope();};})();
 var _noteSaving=false;
 function _setNoteSaving(on){
   var btn=document.getElementById('btnGoToB');
@@ -3519,12 +3555,13 @@ function _setNoteSaving(on){
 }
 function savePayAttention(ok,err){
   var soMap=getSOMap();
-  function getMeta(so){var d=soMap[so]||{};var m=S.soMeta[so]||{};return{itemCode:d.itemCode||m.itemCode||'',localCustomer:d.localCustomer||m.localCustomer||(m.lc||'')};}
+  function getMeta(so){var d=soMap[so]||{};var m=S.soMeta[so]||{};return{itemCode:d.itemCode||m.itemCode||'',localCustomer:d.localCustomer||m.localCustomer||(m.lc||''),program:d.program||m.program||''};}
   var sos=S.selectedSOs;var remark=document.getElementById('noteRemark').value.trim();
   if(!remark){showToast('⚠️ Nhập nội dung ghi chú','er');return;}
-  if(!_noteScope.SO&&!_noteScope.IC&&!_noteScope.LC){showToast('⚠️ Chọn ít nhất 1 mục tác động','er');return;}
+  if(!_noteScope.SO&&!_noteScope.IC&&!_noteScope.LC&&!_noteScope.PR){showToast('⚠️ Chọn ít nhất 1 mục tác động','er');return;}
+  if(_noteScope.PR&&sos.some(function(so){return !String(getMeta(so).program||'').trim();})){showToast('⚠️ SO đã chọn chưa có Program trong Database','er',3500);return;}
   var photoB64=_notePhotoBase64||'',photoNm=_notePhotoName||'';
-  var rows=[];sos.forEach(function(so){var meta=getMeta(so);rows.push({so:_noteScope.SO?so:'',itemCode:_noteScope.IC?meta.itemCode:'',localCustomer:_noteScope.LC?meta.localCustomer:'',remark:remark,email:S.email,timestamp:new Date().toISOString(),photoBase64:photoB64,photoName:photoNm});});
+  var rows=[];sos.forEach(function(so){var meta=getMeta(so);rows.push({so:_noteScope.SO?so:'',itemCode:_noteScope.IC?meta.itemCode:'',localCustomer:_noteScope.LC?meta.localCustomer:'',program:_noteScope.PR?meta.program:'',remark:remark,email:S.email,timestamp:new Date().toISOString(),photoBase64:photoB64,photoName:photoNm});});
   if(_noteSaving)return;
   _noteSaving=true;_setNoteSaving(true);
   _gasCall('savePayAttention',{rows:rows},function(r){
@@ -3570,7 +3607,7 @@ function _renderNotePhoto(){
 }
 function _resetNoteMode(){
   document.getElementById('noteRemark').value='';
-  _noteScope={SO:false,IC:false,LC:false};
+  _noteScope={SO:false,IC:false,LC:false,PR:false};
   _renderNoteScope();
   S.selectedSOs=[];S.soMeta={};renderSOChips();
   _notePhotoBase64='';_notePhotoName='';
@@ -3649,7 +3686,7 @@ function _doPAPoll(){
         if(!changed){
           for(var i=0;i<newRows.length;i++){
             var nr=newRows[i], or=_paRows[i];
-            if(!or||nr.rowIndex!==or.rowIndex||nr.unholdReason!==or.unholdReason||nr.remark!==or.remark){
+            if(!or||nr.rowIndex!==or.rowIndex||nr.unholdReason!==or.unholdReason||nr.remark!==or.remark||nr.program!==or.program){
               changed=true; break;
             }
           }
@@ -3837,54 +3874,56 @@ function _renderPABox(){
   var soMap = getSOMap();
   function getMeta(so){
     var d=soMap[so]||{}, m=S.soMeta[so]||{};
-    return {ic:d.itemCode||m.itemCode||'', lc:d.localCustomer||m.localCustomer||''};
+    return {ic:d.itemCode||m.itemCode||'', lc:d.localCustomer||m.localCustomer||'', pr:d.program||m.program||''};
   }
 
   var matches = [], seen = {};
 
-  // _buildMatches: duyệt paRows, match SO / ItemCode / Customer — độc lập nhau
-  // Một row PA match nếu bất kỳ trường nào trùng với SO đang kiểm tra
+  // Legacy rows without Program retain the original OR behavior.
+  // A row with Program is a precise note: every populated scope must match.
   function _buildMatches(paList){
     S.selectedSOs.forEach(function(so){
-      var meta=getMeta(so), ic=meta.ic, lc=meta.lc;
+      var meta=getMeta(so), ic=meta.ic, lc=meta.lc, pr=meta.pr;
       paList.forEach(function(row){
-        // Thu thập TẤT CẢ scope khớp (không dừng sớm bằng else-if)
         var scopes=[];
-        if(row.so      && row.so===so)                          scopes.push({label:'SO',        val:so});
-        if(row.itemCode && ic && row.itemCode===ic)             scopes.push({label:'Item Code', val:ic});
-        if(row.localCustomer && lc && row.localCustomer===lc)  scopes.push({label:'Khách hàng',val:lc});
-        if(!scopes.length) return;
-        // Dùng key = rowIndex để không hiện trùng cùng một row dù match nhiều SO
-        var key = String(row.rowIndex)+'|'+row.remark;
+        var hasProgram=!!String(row.program||'').trim();
+        if(hasProgram){
+          if(row.so&&row.so!==so) return;
+          if(row.itemCode&&(!ic||row.itemCode!==ic)) return;
+          if(row.localCustomer&&(!lc||row.localCustomer!==lc)) return;
+          if(!pr||row.program!==pr) return;
+          if(row.so)scopes.push({label:'SO',val:so});
+          if(row.itemCode)scopes.push({label:'Item Code',val:ic});
+          if(row.localCustomer)scopes.push({label:'Khach hang',val:lc});
+          scopes.push({label:'Program',val:pr});
+        } else {
+          if(row.so&&row.so===so)scopes.push({label:'SO',val:so});
+          if(row.itemCode&&ic&&row.itemCode===ic)scopes.push({label:'Item Code',val:ic});
+          if(row.localCustomer&&lc&&row.localCustomer===lc)scopes.push({label:'Khach hang',val:lc});
+          if(!scopes.length) return;
+        }
+        var key=String(row.rowIndex)+'|'+row.remark;
         if(seen[key]) return;
         seen[key]=1;
-        // Hiển thị scope rõ nhất (ưu tiên SO > IC > LC)
-        var scopeLabel = scopes[0].label, scopeVal = scopes[0].val;
-        // Nếu match IC hoặc LC nhưng không phải SO → cho biết phạm vi rộng hơn
+        var scopeLabel=scopes[0].label,scopeVal=scopes[0].val;
         if(scopes.length>1){
-          scopeVal = scopes.map(function(s){return s.val;}).join(' / ');
-          scopeLabel = scopes.map(function(s){return s.label;}).join('+');
+          scopeVal=scopes.map(function(s){return s.val;}).join(' / ');
+          scopeLabel=scopes.map(function(s){return s.label;}).join('+');
         }
-        var isHold     = (row.remarkType==='HOLD') || row.remark.toUpperCase().indexOf('HOLD')>=0;
-        var localUnhold= _paUnholdedLocal[row.rowIndex];
-        var isUnholded = !!(localUnhold || (row.unholdReason && row.unholdReason.trim()));
-        var unholdInfo = localUnhold || (isUnholded?{reason:row.unholdReason,email:row.unholdEmail,ts:row.unholdTs}:null);
+        var isHold=(row.remarkType==='HOLD')||row.remark.toUpperCase().indexOf('HOLD')>=0;
+        var localUnhold=_paUnholdedLocal[row.rowIndex];
+        var isUnholded=!!(localUnhold||(row.unholdReason&&row.unholdReason.trim()));
+        var unholdInfo=localUnhold||(isUnholded?{reason:row.unholdReason,email:row.unholdEmail,ts:row.unholdTs}:null);
         matches.push({
-          rowIndex    : row.rowIndex,
-          scopeLabel  : scopeLabel,
-          scopeVal    : scopeVal,
-          remark      : row.remark,
-          isHold      : isHold,
-          isUnholded  : isUnholded,
-          unholdInfo  : unholdInfo,
-          authorEmail : String(row.authorEmail||row.email||'').trim(),
-          authorTs    : String(row.authorTs||row.timestamp||'').trim(),
-          photoRemark : String(row.photoRemark||'').trim()
+          rowIndex:row.rowIndex,scopeLabel:scopeLabel,scopeVal:scopeVal,remark:row.remark,
+          isHold:isHold,isUnholded:isUnholded,unholdInfo:unholdInfo,
+          authorEmail:String(row.authorEmail||row.email||'').trim(),
+          authorTs:String(row.authorTs||row.timestamp||'').trim(),
+          photoRemark:String(row.photoRemark||'').trim()
         });
       });
     });
   }
-
   if(_paRows.length){
     _buildMatches(_paRows);
   } else {
