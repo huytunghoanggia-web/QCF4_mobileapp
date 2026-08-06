@@ -2087,7 +2087,7 @@ function renderSODD(raw){
     var d=soMap[s]||{};
     if(d.itemCode&&d.itemCode.toUpperCase().indexOf(qUp)>=0)return true;
     if(d.localCustomer&&d.localCustomer.toUpperCase().indexOf(qUp)>=0)return true;
-    if(_mode==='note'&&d.program&&d.program.toUpperCase().indexOf(qUp)>=0)return true;
+    if(d.program&&d.program.toUpperCase().indexOf(qUp)>=0)return true;
     return false;
   }):all;
   var shown=filtered.slice(0,MAX);
@@ -2097,7 +2097,7 @@ function renderSODD(raw){
   if(!shown.length){parts.push('<div class="so-none">Không tìm thấy SO nào</div>');}
   else{
     for(var i=0;i<shown.length;i++){
-      var so=shown[i],d=soMap[so]||{},sub=[d.itemCode,d.localCustomer].concat(_mode==='note'?[d.program]:[]).filter(Boolean).join(' · ');
+      var so=shown[i],d=soMap[so]||{},sub=[d.itemCode,d.localCustomer,d.program].filter(Boolean).join(' · ');
       parts.push('<div class="so-item'+(selSet[so]?' sel':'')+'" data-so="'+esc(so)+'">'
         +'<div class="so-item-radio"></div>'
         +'<div class="so-item-body"><div>'+hlText(so,q)+'</div>'+(sub?'<div class="so-item-sub">'+esc(sub)+'</div>':'')+'</div>'
