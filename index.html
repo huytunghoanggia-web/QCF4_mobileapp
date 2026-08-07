@@ -241,6 +241,10 @@ textarea{resize:none;line-height:1.5}
 .sb-bottom-bar.on{display:flex}
 .sb-back-btn{flex:0 0 auto;width:auto;padding:13px 18px;background:#fff;border:1.5px solid var(--border2);color:var(--txt)}
 .sb-next-btn{flex:1}
+.sb-more-btn{flex:0 0 42px;width:42px;padding:0!important;font-size:24px!important;line-height:1;color:var(--txt2)!important}
+.partial-save-menu{display:none;position:fixed;right:12px;bottom:calc(56px + env(safe-area-inset-bottom,0px) + 62px);z-index:210;width:min(270px,calc(100vw - 24px));padding:5px;background:#fff;border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.16)}
+.partial-save-menu.on{display:block}
+.partial-save-menu button{width:100%;min-height:42px;border:0;border-radius:6px;background:#fffbeb;color:#92400e;font:600 13px var(--font);text-align:left;padding:10px 12px;cursor:pointer}
 
 /* SAVE BAR */
 .save-bar{display:none;align-items:center;gap:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:11px 14px;margin-bottom:10px}
@@ -1158,8 +1162,13 @@ input[type=file]{display:none}
 </div><!-- /sB -->
 
 <!-- Bottom bar cố định cho Screen B -->
+<!-- Partial-save action menu: intentionally separate from normal Save. -->
+<div id="partialSaveMenu" class="partial-save-menu" role="menu">
+  <button type="button" role="menuitem" onclick="savePartialFromMenu()">D&#7915;ng ki&#7875;m tra v&#224; l&#432;u ph&#7847;n &#273;&#227; ki&#7875;m</button>
+</div>
 <div class="sb-bottom-bar" id="sBBar">
   <button class="btn btn-o sb-back-btn" onclick="showScreen('A')">← Quay lại</button>
+  <button class="btn btn-o sb-more-btn" id="partialSaveMenuBtn" type="button" onclick="togglePartialSaveMenu(event)" aria-label="Tuy chon them" title="Tuy chon them" aria-expanded="false">&#8942;</button>
   <button class="btn btn-p sb-next-btn" id="saveBtnB" onclick="doSaveFromB()">💾 Lưu</button>
 </div>
 
@@ -2283,12 +2292,13 @@ function decimalPaste(e,el){
   return /^\d+(?:\.\d+)?$/.test(_cleanDecimalInput(next));
 }
 function _setDecimalFieldError(el,on){if(el)el.style.borderColor=on?'var(--ng)':'';}
-function _validateDecimalValuesBeforeSave(){
+function _validateDecimalValuesBeforeSave(partialOnly){
   for(var i=0;i<S.items.length;i++){
     var it=S.items[i];
     if(it.isRemark) continue;
     if(it.isDelta&&it.dRows){
       for(var j=0;j<it.dRows.length;j++){
+        if(partialOnly&&!it.dRows[j].result) continue;
         var dv=String(it.dRows[j].value||'').trim();
         if(dv&&!_isValidDecimalInput(dv)){
           var de=document.querySelector('#decx_'+i+'_'+j+' input');
@@ -2300,6 +2310,7 @@ function _validateDecimalValuesBeforeSave(){
       }
     } else if(it.isDim&&it.dimRows){
       for(var k=0;k<it.dimRows.length;k++){
+        if(partialOnly&&!it.dimRows[k].result) continue;
         var mv=String(it.dimRows[k].value||'').trim();
         if(mv&&!_isValidDecimalInput(mv)){
           var dm=document.querySelector('#dimcx_'+i+'_'+k+' input');
@@ -2309,7 +2320,7 @@ function _validateDecimalValuesBeforeSave(){
           return false;
         }
       }
-    } else if(_isDecimalValueItem(it.itemcheck)){
+    } else if((!partialOnly||it.result)&&_isDecimalValueItem(it.itemcheck)){
       var v=String(it.value||'').trim();
       if(v&&!_isValidDecimalInput(v)){
         var w=document.getElementById('icx'+i); if(w)w.classList.add('on');
@@ -2714,6 +2725,48 @@ function doSaveFromB(){
   if(!_validateDecimalValuesBeforeSave())return;
   doSave();
 }
+function closePartialSaveMenu(){
+  var menu=document.getElementById('partialSaveMenu');
+  var btn=document.getElementById('partialSaveMenuBtn');
+  if(menu)menu.classList.remove('on');
+  if(btn)btn.setAttribute('aria-expanded','false');
+}
+function togglePartialSaveMenu(event){
+  if(event)event.stopPropagation();
+  var menu=document.getElementById('partialSaveMenu');
+  var btn=document.getElementById('partialSaveMenuBtn');
+  if(!menu)return;
+  var opening=!menu.classList.contains('on');
+  menu.classList.toggle('on',opening);
+  if(btn)btn.setAttribute('aria-expanded',opening?'true':'false');
+}
+function savePartialFromMenu(){
+  closePartialSaveMenu();
+  savePartialFromB();
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#partialSaveMenu')&&!e.target.closest('#partialSaveMenuBtn'))closePartialSaveMenu();
+});
+function _partialCompletedResultCount(){
+  var count=0;
+  S.items.forEach(function(it){
+    if(it.isRemark) return;
+    if(it.isDelta&&it.dRows) it.dRows.forEach(function(r){if(r.result)count++;});
+    else if(it.isDim&&it.dimRows) it.dimRows.forEach(function(r){if(r.result)count++;});
+    else if(it.result) count++;
+  });
+  return count;
+}
+function savePartialFromB(){
+  if(_isSaving){showToast('⏳ Đang lưu, vui lòng chờ...','',1500);return;}
+  var completed=_partialCompletedResultCount();
+  if(!completed){
+    showToast('⚠️ Hãy ghi nhận ít nhất 1 hạng mục trước khi dừng','er',3500);
+    return;
+  }
+  if(!_validateDecimalValuesBeforeSave(true))return;
+  doSave(true);
+}
 function sumRow(k,v,cls){return'<div class="sum-row"><span class="sum-k">'+esc(k)+'</span><span class="sum-v'+(cls?' '+cls:'')+'">'+esc(v||'')+'</span></div>';}
 function uniq(a){return a.filter(function(v,i,ar){return ar.indexOf(v)===i;});}
 
@@ -2721,7 +2774,8 @@ function uniq(a){return a.filter(function(v,i,ar){return ar.indexOf(v)===i;});}
 // SAVE
 // ══════════════════════════════════════════════════════════════
 var _isSaving = false; // guard chống double-tap nút Lưu
-async function doSave(){
+async function doSave(partialOnly){
+  partialOnly=!!partialOnly;
   if(_isSaving){ showToast('⏳ Đang lưu, vui lòng chờ...','',1500); return; }
   _isSaving = true;
   var empty=0;
@@ -2731,7 +2785,7 @@ async function doSave(){
     else if(it.isDim)it.dimRows.forEach(function(r){if(!r.result)empty++;});
     else if(!it.result)empty++;
   });
-  if(empty>0&&!confirm('Còn '+empty+' hạng mục chưa có kết quả. Vẫn lưu?')){_isSaving=false;return;}
+  if(!partialOnly&&empty>0&&!confirm('Còn '+empty+' hạng mục chưa có kết quả. Vẫn lưu?')){_isSaving=false;return;}
   var now=new Date(),soMap=getSOMap();
   // Gom tất cả SO thành 1 payload duy nhất
   var soJoinedF=S.selectedSOs.join(', ');
@@ -2744,12 +2798,25 @@ async function doSave(){
   });
   var results=[];
   S.items.forEach(function(it){
-    if(it.isRemark){results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard||'',result:'NOTE',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});}
-    else if(it.isDelta){it.dRows.forEach(function(r){results.push({itemId:it.itemId,itemcheck:it.itemcheck+' — '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});});}
-    else if(it.isDim){it.dimRows.forEach(function(r){results.push({itemId:it.itemId,itemcheck:it.itemcheck+' — '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});});}
-    else{results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard,result:it.result||'',value:it.value||'',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});}
+    if(it.isRemark){
+      if(!partialOnly||it.note||it.photoBase64) results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard||'',result:'NOTE',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});
+    } else if(it.isDelta){
+      it.dRows.forEach(function(r){
+        if(partialOnly&&!r.result)return;
+        results.push({itemId:it.itemId,itemcheck:it.itemcheck+' \u2014 '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});
+      });
+    } else if(it.isDim){
+      it.dimRows.forEach(function(r){
+        if(partialOnly&&!r.result)return;
+        results.push({itemId:it.itemId,itemcheck:it.itemcheck+' \u2014 '+r.lbl,standard:it.standard,result:r.result||'',value:r.value||'',note:r.note||'',photoBase64:'',photoName:''});
+      });
+    } else {
+      if(partialOnly&&!it.result)return;
+      results.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard,result:it.result||'',value:it.value||'',note:it.note||'',photoBase64:it.photoBase64||'',photoName:it.photoName||''});
+    }
   });
-  // Mỗi lần lưu tạo 1 sessionId duy nhất — chống gộp, dễ debug
+  if(partialOnly&&!results.length){_isSaving=false;showToast('⚠️ Không có hạng mục nào được lưu','er',3500);return;}
+  // Each save has one session ID, used for retry-safe server synchronization.
   var sessionId = 'SID_'+now.getTime()+'_'+Math.random().toString(36).slice(2,7);
   var payloads=[{
     _sessionId: sessionId,
@@ -2778,9 +2845,9 @@ async function doSave(){
     showToast('Khong the luu an toan tren thiet bi. Kiem tra dung luong roi thu lai.','er',6000);
     return;
   }
-  _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length,sessionId);
+  _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length,sessionId,partialOnly);
   _isSaving = false; // reset guard sau khi đã push vào queue thành công
-  showDone(nSaved,!S.online);
+  showDone(nSaved,!S.online,partialOnly);
   if(S.online)_bgSyncQueue();
   // ── Gom ghi chú từ TẤT CẢ nguồn ──────────────────────────
   var paRows=[];
@@ -2921,7 +2988,8 @@ function _syncOneByOne(queue, idx, savedCount, done, errors){
   );
 }
 
-function showDone(saved,offline){
+function showDone(saved,offline,partialOnly){
+  partialOnly=!!partialOnly;
   var soMap=getSOMap();
   var icL=uniq(S.selectedSOs.map(function(s){return(soMap[s]||{}).itemCode||'';}).filter(Boolean));
   var lcL=uniq(S.selectedSOs.map(function(s){return(soMap[s]||{}).localCustomer||'';}).filter(Boolean));
@@ -2931,14 +2999,25 @@ function showDone(saved,offline){
   document.getElementById('doneCard').innerHTML=sumRow('SO(s)',S.selectedSOs.join(', '))+(icL.length?sumRow('Item Code',icL.join(', ')):'')+
     (lcL.length?sumRow('Local Customer',lcL.join(', ')):'')+sumRow('Process',S.process)+sumRow('QC',S.email)+(S.operatorId?sumRow('Operator ID',S.operatorId):'')+(S.machine?sumRow('Machine',S.machine):'')+
     sumRow('OK',String(okN),'ok')+sumRow('NG',String(ngN),ngN>0?'ng':'ok')+(offline?sumRow('Trạng thái','📥 Chờ sync','warn'):'');
+  if(partialOnly)document.getElementById('doneCard').innerHTML+=sumRow('Tr\u1ea1ng th\u00e1i','D\u1eebng ki\u1ec3m tra - \u0111\u00e3 l\u01b0u ph\u1ea7n \u0111\u00e3 ki\u1ec3m','warn');
   showScreen('D');
 }
 
-function _injectSessionToHistory(ic,lc,okN,ngN,naN,sessionId){
+function _injectSessionToHistory(ic,lc,okN,ngN,naN,sessionId,partialOnly){
   var soArr=S.selectedSOs.slice();var soJoined=soArr.join(', ');var soDisp=soArr.length>1?soArr[0]+' +'+(soArr.length-1):soArr[0];
   var now=new Date();var dateStr=_padC(now.getDate())+'/'+_padC(now.getMonth()+1)+'/'+now.getFullYear();var timeStr=_padC(now.getHours())+':'+_padC(now.getMinutes())+':'+_padC(now.getSeconds());
-  var items=[];S.items.forEach(function(it){if(it.isDelta){it.dRows.forEach(function(r){items.push({itemcheck:it.itemcheck+' — '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});}else if(it.isDim){it.dimRows.forEach(function(r){items.push({itemcheck:it.itemcheck+' — '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});}else{items.push({itemcheck:it.itemcheck,result:it.result||'',value:it.value||'',note:it.note||'',photo:''});}});
-  // Tìm sessionId từ queue item vừa thêm (item cuối cùng trong queue)
+  var items=[];
+  S.items.forEach(function(it){
+    if(it.isRemark){
+      if(!partialOnly||it.note||it.photoBase64)items.push({itemcheck:it.itemcheck,result:partialOnly?'NOTE':(it.result||''),value:'',note:it.note||'',photo:''});
+    } else if(it.isDelta){
+      it.dRows.forEach(function(r){if(!partialOnly||r.result)items.push({itemcheck:it.itemcheck+' \u2014 '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});
+    } else if(it.isDim){
+      it.dimRows.forEach(function(r){if(!partialOnly||r.result)items.push({itemcheck:it.itemcheck+' \u2014 '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});
+    } else if(!partialOnly||it.result){
+      items.push({itemcheck:it.itemcheck,result:it.result||'',value:it.value||'',note:it.note||'',photo:''});
+    }
+  });
   var _sid = sessionId||('LOC_'+now.getTime());
   var sess={so:soJoined,soArr:soArr,soDisplay:soDisp,itemCode:ic,localCustomer:lc,
     process:S.process,inspector:S.email,operatorId:S.operatorId||'',machine:S.machine||'',
