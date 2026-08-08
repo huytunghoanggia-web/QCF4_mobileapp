@@ -1267,7 +1267,7 @@ input[type=file]{display:none}
 // ══════════════════════════════════════════════════════════════
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbysmYMLALPTUgfqATKBpAsCRASJd22QRwNpE38ydqdYFKevZgTkTI5Ld2fMnE2lNvG68A/exec';
 
-var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'', recheckSourceId:'' };
+var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'', recheckSourceId:'', recheckSetup:null };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
 var _notePhotoName   = '';
 var H = { page:1, total:0, pageSize:30, inspList:[], loading:false, sessions:[], all:[], allLoaded:false, mode:'recent', recentAll:[], recentInspList:[] };
@@ -1416,8 +1416,8 @@ function startRecheckFromDrawer(){
   S.operatorId=String(sess.operatorId||'').trim();S.machine=String(sess.machine||'').trim();S.lotQty=String(sess.lotQty||'').trim();S.aqlQty=String(sess.aqlQty||'').trim();S.aqlAccept=String(sess.aqlAccept||'').trim();
   [['operatorIdInp','operatorId'],['machineInp','machine'],['lotQtyInp','lotQty'],['aqlQtyInp','aqlQty'],['aqlAcceptInp','aqlAccept']].forEach(function(pair){var el=document.getElementById(pair[0]);if(el)el.value=S[pair[1]]||'';});
   S.recheckSourceId=sess.checkId;
-  closeDr();goToB();_restoreRecheckSetup(sourceItems);renderItems();
-  showToast('\u21bb \u0110ang t\u1ea1o phi\u00ean check l\u1ea1i. K\u1ebft qu\u1ea3, Value v\u00e0 ghi ch\u00fa \u0111\u1ec1u \u0111\u01b0\u1ee3c l\u00e0m m\u1edbi.','ok',4200);
+  S.recheckSetup={sourceItems:sourceItems};
+  closeDr();goToB();
 }
 // gasGetPARows — không dùng nữa (PA data đã có trong bootApp)
 // function gasGetPARows(ok,err){ _gasCall('getPayAttentionRows',{},ok,err||function(){}); }
@@ -2266,6 +2266,7 @@ function onProcChange(val){
   _processSelectionVersion++;
   S.process = val;
   S.recheckSourceId='';
+  S.recheckSetup=null;
   S.operatorId=''; S.machine=''; S.lotQty=''; S.aqlQty=''; S.aqlAccept='';
   var oi=document.getElementById('operatorIdInp'); if(oi) oi.value='';
   var mi=document.getElementById('machineInp');    if(mi) mi.value='';
@@ -2333,6 +2334,9 @@ function goToB(){
            dRows:isDelta?[{lbl:'Màu 1',result:'',value:'',note:''},{lbl:'Màu 2',result:'',value:'',note:''}]:null,
            dimRows:isDim?[{lbl:'L',result:'',value:'',note:''},{lbl:'W',result:'',value:'',note:''},{lbl:'H',result:'',value:'',note:''}]:null};
   });
+  if(S.recheckSourceId&&S.recheckSetup&&Array.isArray(S.recheckSetup.sourceItems)){
+    _restoreRecheckSetup(S.recheckSetup.sourceItems);
+  }
   if(S.online)gasCheckDup(S.selectedSOs[0],proc,function(r){if(r&&r.ok&&r.exists){var el=document.getElementById('alertDup');el.textContent='⚠️ '+S.selectedSOs[0]+' đã có lần kiểm tại "'+proc+'". Vẫn có thể tiếp tục.';el.classList.add('on');}});
   var _bso=document.getElementById('bSO');if(_bso)_bso.textContent=S.selectedSOs.length>1?S.selectedSOs.length+' SOs':S.selectedSOs[0];
   var _bproc=document.getElementById('bProc');if(_bproc)_bproc.textContent=proc;
@@ -3197,7 +3201,7 @@ function _padC(n){return n<10?'0'+n:''+n;}
 
 function resetForm(){
   if(S.items){S.items.forEach(function(it){it.photoBase64='';});}
-  S.selectedSOs=[];S.process='';S.items=[];S.soMeta={};S.recheckSourceId='';
+  S.selectedSOs=[];S.process='';S.items=[];S.soMeta={};S.recheckSourceId='';S.recheckSetup=null;
   S.operatorId='';S.machine='';S.lotQty='';S.aqlQty='';S.aqlAccept='';
   var _oi=document.getElementById('operatorIdInp');if(_oi)_oi.value='';
   var _mi=document.getElementById('machineInp');if(_mi)_mi.value='';hideMachineDD();
