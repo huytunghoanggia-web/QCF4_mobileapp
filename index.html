@@ -2741,6 +2741,12 @@ function _previousProcessAuditKey(previousProcess){
   var sos=S.selectedSOs.slice().map(function(so){return _previousProcessText(so).toUpperCase();}).sort();
   return sos.join('|')+'|'+_previousProcessText(S.process)+'|'+_previousProcessText(previousProcess);
 }
+function _finishPreviousProcessAudit(audit){
+  if(!audit)return;
+  audit.pending=false;
+  var waiters=audit.waiters||[];audit.waiters=[];
+  waiters.forEach(function(done){try{done();}catch(e){}});
+}
 function _queuePreviousProcessAudit(index){
   var item=S.items[index];
   if(!_isPreviousProcessItem(item,index))return;
@@ -2749,27 +2755,45 @@ function _queuePreviousProcessAudit(index){
   var previousProcess=_canonicalPreviousProcess(item.value);
   if(!previousProcess||!S.selectedSOs.length||!S.online)return;
   var request=++_previousProcessAuditRequest, key=_previousProcessAuditKey(previousProcess);
-  _previousProcessAuditTimer=setTimeout(function(){
-    if(request!==_previousProcessAuditRequest||_previousProcessAuditKey(previousProcess)!==key||_canonicalPreviousProcess(item.value)!==previousProcess)return;
-    gasCheckPreviousProcessReports({sos:S.selectedSOs.slice(),previousProcess:previousProcess},function(r){
-      if(request!==_previousProcessAuditRequest||_previousProcessAuditKey(previousProcess)!==key||_canonicalPreviousProcess(item.value)!==previousProcess)return;
-      if(!r||!r.ok)return;
-      var missing=Array.isArray(r.missingSOs)?r.missingSOs.filter(Boolean):[];
-      item.prevProcessAudit={key:key,previousProcess:previousProcess,missingSOs:missing};
-      if(missing.length){
-        var shown=missing.slice(0,3).join(', ')+(missing.length>3?' ...':'');
-        showToast('C\u1ea3nh b\u00e1o: ch\u01b0a c\u00f3 checksheet c\u00f4ng \u0111o\u1ea1n '+previousProcess+' cho SO '+shown+'. Ghi ch\u00fa h\u1ec7 th\u1ed1ng s\u1ebd l\u01b0u c\u00f9ng phi\u00ean n\u00e0y.','er',6500);
-      }
-    },function(){
-      if(request===_previousProcessAuditRequest&&_previousProcessAuditKey(previousProcess)===key&&_canonicalPreviousProcess(item.value)===previousProcess)
-        showToast('Ch\u01b0a th\u1ec3 \u0111\u1ed1i chi\u1ebfu c\u00f4ng \u0111o\u1ea1n li\u1ec1n tr\u01b0\u1edbc. App s\u1ebd kh\u00f4ng t\u1ea1o ghi ch\u00fa t\u1ef1 \u0111\u1ed9ng cho l\u1ea7n nh\u1eadp n\u00e0y.','er',5000);
-    });
-  },550);
+  var audit={key:key,previousProcess:previousProcess,missingSOs:[],pending:true,waiters:[]};
+  item.prevProcessAudit=audit;
+  gasCheckPreviousProcessReports({sos:S.selectedSOs.slice(),previousProcess:previousProcess},function(r){
+    if(request!==_previousProcessAuditRequest||item.prevProcessAudit!==audit||_previousProcessAuditKey(previousProcess)!==key||_canonicalPreviousProcess(item.value)!==previousProcess)return;
+    if(!r||!r.ok){
+      audit.failed=true;_finishPreviousProcessAudit(audit);
+      showToast('Ch\u01b0a th\u1ec3 \u0111\u1ed1i chi\u1ebfu c\u00f4ng \u0111o\u1ea1n li\u1ec1n tr\u01b0\u1edbc. App s\u1ebd kh\u00f4ng t\u1ea1o ghi ch\u00fa t\u1ef1 \u0111\u1ed9ng cho l\u1ea7n nh\u1eadp n\u00e0y.','er',5000);
+      return;
+    }
+    audit.missingSOs=Array.isArray(r.missingSOs)?r.missingSOs.filter(Boolean):[];
+    _finishPreviousProcessAudit(audit);
+    if(audit.missingSOs.length){
+      var shown=audit.missingSOs.slice(0,3).join(', ')+(audit.missingSOs.length>3?' ...':'');
+      showToast('C\u1ea3nh b\u00e1o: ch\u01b0a c\u00f3 checksheet c\u00f4ng \u0111o\u1ea1n '+previousProcess+' cho SO '+shown+'. Ghi ch\u00fa h\u1ec7 th\u1ed1ng s\u1ebd l\u01b0u c\u00f9ng phi\u00ean n\u00e0y.','er',6500);
+    }
+  },function(){
+    if(request===_previousProcessAuditRequest&&item.prevProcessAudit===audit&&_previousProcessAuditKey(previousProcess)===key&&_canonicalPreviousProcess(item.value)===previousProcess){
+      audit.failed=true;_finishPreviousProcessAudit(audit);
+      showToast('Ch\u01b0a th\u1ec3 \u0111\u1ed1i chi\u1ebfu c\u00f4ng \u0111o\u1ea1n li\u1ec1n tr\u01b0\u1edbc. App s\u1ebd kh\u00f4ng t\u1ea1o ghi ch\u00fa t\u1ef1 \u0111\u1ed9ng cho l\u1ea7n nh\u1eadp n\u00e0y.','er',5000);
+    }
+  });
+}
+function _waitForPreviousProcessAuditBeforeSave(){
+  var pending=[];
+  S.items.forEach(function(item,index){
+    if(_isPreviousProcessItem(item,index)&&item.prevProcessAudit&&item.prevProcessAudit.pending)pending.push(item.prevProcessAudit);
+  });
+  if(!pending.length)return Promise.resolve(true);
+  return Promise.all(pending.map(function(audit){return new Promise(function(done){
+    var finished=false;
+    function finish(ok){if(finished)return;finished=true;done(ok);}
+    audit.waiters.push(function(){finish(true);});
+    setTimeout(function(){finish(false);},12000);
+  });})).then(function(results){return results.every(Boolean);});
 }
 function _buildAutoPreviousProcessAttentionRows(){
   var rows=[];
   S.items.forEach(function(item,index){
-    if(!_isPreviousProcessItem(item,index)||!item.result||!item.prevProcessAudit)return;
+    if(!_isPreviousProcessItem(item,index)||!item.prevProcessAudit||item.prevProcessAudit.pending)return;
     var audit=item.prevProcessAudit, previousProcess=_canonicalPreviousProcess(item.value);
     if(!previousProcess||audit.previousProcess!==previousProcess||audit.key!==_previousProcessAuditKey(previousProcess))return;
     (audit.missingSOs||[]).forEach(function(so){
@@ -2951,6 +2975,11 @@ async function doSave(partialOnly){
     else if(!it.result)empty++;
   });
   if(!partialOnly&&empty>0&&!confirm('Còn '+empty+' hạng mục chưa có kết quả. Vẫn lưu?')){_isSaving=false;return;}
+  if(!await _waitForPreviousProcessAuditBeforeSave()){
+    _isSaving=false;
+    showToast('Ch\u01b0a \u0111\u1ed1i chi\u1ebfu xong c\u00f4ng \u0111o\u1ea1n li\u1ec1n tr\u01b0\u1edbc. Vui l\u00f2ng ch\u1edd gi\u00e2y l\u00e1t r\u1ed3i l\u01b0u l\u1ea1i.','er',5000);
+    return;
+  }
   var now=new Date(),soMap=getSOMap();
   // Gom tất cả SO thành 1 payload duy nhất
   var soJoinedF=S.selectedSOs.join(', ');
