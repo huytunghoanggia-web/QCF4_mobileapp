@@ -2767,16 +2767,15 @@ function _queuePreviousProcessAudit(index){
   },550);
 }
 function _buildAutoPreviousProcessAttentionRows(){
-  var rows=[],soMap=getSOMap();
+  var rows=[];
   S.items.forEach(function(item,index){
     if(!_isPreviousProcessItem(item,index)||!item.result||!item.prevProcessAudit)return;
     var audit=item.prevProcessAudit, previousProcess=_canonicalPreviousProcess(item.value);
     if(!previousProcess||audit.previousProcess!==previousProcess||audit.key!==_previousProcessAuditKey(previousProcess))return;
     (audit.missingSOs||[]).forEach(function(so){
       if(S.selectedSOs.indexOf(so)<0)return;
-      var meta=soMap[so]||S.soMeta[so]||{};
-      rows.push({so:so,itemCode:meta.itemCode||'',localCustomer:meta.localCustomer||'',program:meta.program||'',
-        remark:'Ch\u01b0a c\u00f3 checksheet c\u00f4ng \u0111o\u1ea1n '+previousProcess,remarkType:'SYSTEM_MISSING_PROCESS',email:S.email,timestamp:new Date().toISOString()});
+      rows.push({so:so,remark:'Ch\u01b0a c\u00f3 checksheet c\u00f4ng \u0111o\u1ea1n '+previousProcess,
+        remarkType:'SYSTEM_MISSING_PROCESS',email:S.email,timestamp:new Date().toISOString()});
     });
   });
   return rows;
