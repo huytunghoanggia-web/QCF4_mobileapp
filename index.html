@@ -462,7 +462,7 @@ textarea{resize:none;line-height:1.5}
 .ic-add-btn.on{background:#fff7ed;border-color:#fdba74;color:#c2410c}
 .ic-custom{padding:0 13px 9px;display:none}
 .ic-custom.on{display:block}
-.ic-custom input{border-color:var(--ac)}
+.ic-custom input,.ic-custom select{border-color:var(--ac)}
 .ic-note{padding:0 13px 11px}
 .ic-note textarea{font-size:12px;background:#F7F7FA;border-color:var(--border)}
 .ic-photo{margin:0 13px 11px;border:1.5px dashed var(--border2);border-radius:9px;overflow:hidden}
@@ -1267,7 +1267,7 @@ input[type=file]{display:none}
 // ══════════════════════════════════════════════════════════════
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbysmYMLALPTUgfqATKBpAsCRASJd22QRwNpE38ydqdYFKevZgTkTI5Ld2fMnE2lNvG68A/exec';
 
-var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'' };
+var S = { email:'', name:'', selectedSOs:[], process:'', items:[], boot:null, queue:[], online:navigator.onLine, soMeta:{}, operatorId:'', machine:'', lotQty:'', aqlQty:'', aqlAccept:'', recheckSourceId:'' };
 var _notePhotoBase64 = '';  // ảnh đính kèm remark (note mode)
 var _notePhotoName   = '';
 var H = { page:1, total:0, pageSize:30, inspList:[], loading:false, sessions:[], all:[], allLoaded:false, mode:'recent', recentAll:[], recentInspList:[] };
@@ -1335,6 +1335,90 @@ function gasGetHistory(p,ok,err) { _gasCall('getHistory',{params:p},ok,err); }
 function gasSearchAll(p,ok,err)  { _gasCall('searchAllHistory',{params:p},ok,err); }
 function gasGetHistoryVersion(ok,err){ _gasCall('getHistoryVersion',{},ok,err||function(){}); }
 function gasCheckDup(so,pr,ok)   { _gasCall('checkDup',{so:so,process:pr},ok,function(){}); }
+function gasCheckPreviousProcessReports(p,ok,err){ _gasCall('checkPreviousProcessReports',{params:p},ok,err||function(){}); }
+
+// Recheck metadata lives only in the new session CheckID. No Index column or side sheet is used.
+function _rckEncode(s){
+  return btoa(unescape(encodeURIComponent(String(s||'')))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function _rckDecode(s){
+  try{
+    s=String(s||'').replace(/-/g,'+').replace(/_/g,'/');
+    while(s.length%4)s+='=';
+    return decodeURIComponent(escape(atob(s)));
+  }catch(e){return '';}
+}
+function _baseSessionId(now){
+  return 'SID_'+now.getTime()+'_'+Math.random().toString(36).slice(2,7);
+}
+function _recheckMeta(sessOrId){
+  var id=typeof sessOrId==='object' ? (sessOrId.checkId||sessOrId._sessionId||'') : sessOrId;
+  var parts=String(id||'').split('~');
+  if(parts.length===2&&parts[1]==='P')return{isRecheck:false,isPartial:true,sourceCheckId:''};
+  if(parts.length===4&&parts[1]==='RCK')return{isRecheck:true,isPartial:parts[3]==='P',sourceCheckId:_rckDecode(parts[2])};
+  // Compat with the first local trial format; no data is discarded if it exists.
+  if(parts.length===3&&parts[0]==='PRT'&&parts[2]==='P')return{isRecheck:false,isPartial:true,sourceCheckId:''};
+  if(parts.length===5&&parts[0]==='RCK')return{isRecheck:true,isPartial:parts[4]==='P',sourceCheckId:_rckDecode(parts[1])};
+  return{isRecheck:false,isPartial:false,sourceCheckId:''};
+}
+function _makeRecheckSessionId(sourceId,now,partialOnly){
+  return _baseSessionId(now)+'~RCK~'+_rckEncode(sourceId)+'~'+(partialOnly?'P':'F');
+}
+function _makePartialSessionId(now){
+  return _baseSessionId(now)+'~P';
+}
+function _isRecheckEligible(sess){
+  if(!sess||sess._local||!sess._dataFileId||!sess.checkId)return false;
+  if(String(sess.inspector||'').trim()!==String(S.email||'').trim())return false;
+  var meta=_recheckMeta(sess);
+  if(meta.isPartial)return false;
+  var age=Date.now()-Number(sess.tsNum||0);
+  return age>=0&&age<=2*60*60*1000;
+}
+function _sourceRowsForItem(sourceItems,item){
+  var base=String(item.itemcheck||'').trim();
+  return (sourceItems||[]).filter(function(row){
+    if(item.itemId&&String(row.itemId||'').trim()===String(item.itemId).trim())return true;
+    var name=String(row.itemcheck||'').trim();
+    return name===base||name.indexOf(base+' \u2014 ')===0;
+  });
+}
+function _sourceLabel(row,fallback){
+  var name=String(row&&row.itemcheck||'').trim();
+  var pos=name.lastIndexOf(' \u2014 ');
+  return (pos>=0?name.slice(pos+3).trim():'')||fallback;
+}
+function _restoreRecheckSetup(sourceItems){
+  S.items.forEach(function(item){
+    var rows=_sourceRowsForItem(sourceItems,item);
+    if(!rows.length)return;
+    if(item.isDelta){
+      item.dRows=rows.slice(0,10).map(function(row,idx){return{lbl:_sourceLabel(row,'M\u00e0u '+(idx+1)),result:'',value:'',note:''};});
+    }else if(item.isDim){
+      item.dimRows=rows.slice(0,10).map(function(row,idx){return{lbl:_sourceLabel(row,['L','W','H','D','T','A','B','C','X','Y'][idx]||('D'+(idx+1))),result:'',value:'',note:''};});
+    }
+  });
+}
+function startRecheckFromDrawer(){
+  var sess=_activeDrawerSess;
+  if(!_isRecheckEligible(sess)){showToast('Phi\u00ean n\u00e0y kh\u00f4ng c\u00f2n \u0111\u1ee7 \u0111i\u1ec1u ki\u1ec7n check l\u1ea1i','er',3500);return;}
+  if(!S.boot||!S.boot.itemsByProcess||!(S.boot.itemsByProcess[sess.process]||[]).length){showToast('Kh\u00f4ng t\u00ecm th\u1ea5y h\u1ea1ng m\u1ee5c hi\u1ec7n h\u00e0nh cho c\u00f4ng \u0111o\u1ea1n n\u00e0y','er',4500);return;}
+  var sourceItems=Array.isArray(sess.items)?sess.items.slice():[];
+  if(!sourceItems.length){showToast('H\u1ea1ng m\u1ee5c c\u1ee7a phi\u00ean c\u0169 ch\u01b0a t\u1ea3i xong','er',3000);return;}
+  var sourceSOs=(sess.soArr&&sess.soArr.length?sess.soArr:String(sess.so||'').split(',')).map(function(s){return String(s||'').trim();}).filter(Boolean);
+  if(!sourceSOs.length)return;
+  var soMap=getSOMap();
+  S.selectedSOs=sourceSOs;S.soMeta={};
+  sourceSOs.forEach(function(so){if(!soMap[so])S.soMeta[so]={itemCode:sess.itemCode||'',localCustomer:sess.localCustomer||'',manual:true};});
+  renderSOChips();
+  var procSelect=document.getElementById('procSelect');if(procSelect)procSelect.value=sess.process||'';
+  onProcChange(sess.process||'');
+  S.operatorId=String(sess.operatorId||'').trim();S.machine=String(sess.machine||'').trim();S.lotQty=String(sess.lotQty||'').trim();S.aqlQty=String(sess.aqlQty||'').trim();S.aqlAccept=String(sess.aqlAccept||'').trim();
+  [['operatorIdInp','operatorId'],['machineInp','machine'],['lotQtyInp','lotQty'],['aqlQtyInp','aqlQty'],['aqlAcceptInp','aqlAccept']].forEach(function(pair){var el=document.getElementById(pair[0]);if(el)el.value=S[pair[1]]||'';});
+  S.recheckSourceId=sess.checkId;
+  closeDr();goToB();_restoreRecheckSetup(sourceItems);renderItems();
+  showToast('\u21bb \u0110ang t\u1ea1o phi\u00ean check l\u1ea1i. K\u1ebft qu\u1ea3, Value v\u00e0 ghi ch\u00fa \u0111\u1ec1u \u0111\u01b0\u1ee3c l\u00e0m m\u1edbi.','ok',4200);
+}
 // gasGetPARows — không dùng nữa (PA data đã có trong bootApp)
 // function gasGetPARows(ok,err){ _gasCall('getPayAttentionRows',{},ok,err||function(){}); }
 function gasVerifySession(email,pwd,ok,err){ _gasCall('verifySession',{email:email,pwd:pwd},ok,err||function(){}); }
@@ -2149,6 +2233,7 @@ function onSOKey(e){if(e.key==='Enter'){e.preventDefault();var v=document.getEle
 function toggleSO(so){var idx=S.selectedSOs.indexOf(so);if(idx>=0){S.selectedSOs.splice(idx,1);delete S.soMeta[so];}else{S.selectedSOs.push(so);var soMap=getSOMap();if(!soMap[so])S.soMeta[so]={itemCode:'',localCustomer:'',manual:true};}renderSOChips();closeSODD();var inp=document.getElementById('soInput');inp.value='';document.getElementById('soAddManualBtn').style.display='none';}
 function _resetCheckContextAfterLastSO(){
   if(_mode!=='check'||S.selectedSOs.length) return;
+  S.recheckSourceId='';
   S.items=[];
   onProcChange('');
   var pSel=document.getElementById('procSelect');if(pSel)pSel.value='';
@@ -2180,6 +2265,7 @@ function renderSOInfo(){
 function onProcChange(val){
   _processSelectionVersion++;
   S.process = val;
+  S.recheckSourceId='';
   S.operatorId=''; S.machine=''; S.lotQty=''; S.aqlQty=''; S.aqlAccept='';
   var oi=document.getElementById('operatorIdInp'); if(oi) oi.value='';
   var mi=document.getElementById('machineInp');    if(mi) mi.value='';
@@ -2342,6 +2428,9 @@ function renderItems(){
     else if(item.isRemark){div.className='ic remark-order';div.innerHTML=buildRemarkOrderHTML(item,i);}
     else{
       var r=item.result,rc=!r?'':(r==='OK'?'r-ok':r==='NG'?'r-ng':r==='NA'?'r-na':'r-cx'),isCx=r&&['OK','NG','NA'].indexOf(r)<0;
+      var isPreviousProcess=_isPreviousProcessItem(item,i);
+      var valueControl=isPreviousProcess?_previousProcessSelectHTML(i,item.value||''):
+        '<input type="text"'+(_isDecimalValueItem(item.itemcheck)?_decimalInputAttr():'')+' placeholder="Value / Giá trị thực tế..." value="'+(item.value?esc(item.value):'')+'" oninput="setVal('+i+',this.value,this)">';
       div.className='ic '+rc;
             var hasExtra=(item.note||item.photoBase64)?true:false;
       div.innerHTML='<div class="ic-head"><div class="ic-num">'+pad(i+1)+'</div>'
@@ -2356,7 +2445,7 @@ function renderItems(){
         +'<button class="ic-add-btn'+(hasExtra?' on':'')+'" id="icxpbtn'+i+'" onclick="toggleICExtra('+i+')">'
         +(hasExtra?'× Ghi chú':'+ Thêm')
         +'</button></div>'
-        +'<div class="ic-custom'+(S.items[i]&&S.items[i].value?' on':'')+'" id="icx'+i+'"><input type="text"'+(_isDecimalValueItem(item.itemcheck)?_decimalInputAttr():'')+' placeholder="Value / Giá trị thực tế..." value="'+(S.items[i]&&S.items[i].value?esc(S.items[i].value):'')+'" oninput="setVal('+i+',this.value,this)"></div>'
+        +'<div class="ic-custom'+(S.items[i]&&S.items[i].value?' on':'')+'" id="icx'+i+'">'+valueControl+'</div>'
         +'<div class="ic-extra'+(hasExtra?' on':'')+'" id="icxp'+i+'">'+'<div class="ic-note">'
         +'<textarea rows="2" placeholder="Ghi chú..." oninput="S.items['+i+'].note=this.value">'+esc(item.note||'')+'</textarea></div>'
         +'<div class="ic-photo" id="iphoto'+i+'">'+photoHTML(item,i)+'</div></div>';
@@ -2615,8 +2704,81 @@ function toggleICExtra(i){
     if(ta) setTimeout(function(){ta.focus();}, 80);
   }
 }
+var _previousProcessAuditTimer=null,_previousProcessAuditRequest=0;
+var PREVIOUS_PROCESS_ITEM_KEY='xac nhan cong doan lien truoc';
+function _previousProcessText(v){
+  var s=String(v||'').toLowerCase();
+  try{s=s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');}catch(e){}
+  return s.replace(/\u0111/g,'d').replace(/\s+/g,' ').trim();
+}
+function _isPreviousProcessItem(item,index){
+  if(index!==0||!item)return false;
+  var key=_previousProcessText(item.itemcheck).replace(/_/g,' ').replace(/[.:]+$/g,'').replace(/\s+/g,' ').trim();
+  return key===PREVIOUS_PROCESS_ITEM_KEY;
+}
+function _previousProcessSelectHTML(index,value){
+  var selected=String(value||''),list=(S.boot&&S.boot.processes)||[];
+  var html='<select onchange="setVal('+index+',this.value,this)"><option value="">-- Ch\u1ecdn c\u00f4ng \u0111o\u1ea1n li\u1ec1n tr\u01b0\u1edbc --</option>';
+  for(var i=0;i<list.length;i++){
+    var process=String(list[i]||'').trim();if(!process)continue;
+    html+='<option value="'+esc(process)+'"'+(process===selected?' selected':'')+'>'+esc(process)+'</option>';
+  }
+  return html+'</select>';
+}
+function _canonicalPreviousProcess(value){
+  var typed=_previousProcessText(value), list=(S.boot&&S.boot.processes)||[];
+  if(!typed)return '';
+  for(var i=0;i<list.length;i++){
+    if(_previousProcessText(list[i])===typed)return String(list[i]||'').trim();
+  }
+  return '';
+}
+function _previousProcessAuditKey(previousProcess){
+  var sos=S.selectedSOs.slice().map(function(so){return _previousProcessText(so).toUpperCase();}).sort();
+  return sos.join('|')+'|'+_previousProcessText(S.process)+'|'+_previousProcessText(previousProcess);
+}
+function _queuePreviousProcessAudit(index){
+  var item=S.items[index];
+  if(!_isPreviousProcessItem(item,index))return;
+  clearTimeout(_previousProcessAuditTimer);
+  item.prevProcessAudit=null;
+  var previousProcess=_canonicalPreviousProcess(item.value);
+  if(!previousProcess||!S.selectedSOs.length||!S.online)return;
+  var request=++_previousProcessAuditRequest, key=_previousProcessAuditKey(previousProcess);
+  _previousProcessAuditTimer=setTimeout(function(){
+    if(request!==_previousProcessAuditRequest||_previousProcessAuditKey(previousProcess)!==key||_canonicalPreviousProcess(item.value)!==previousProcess)return;
+    gasCheckPreviousProcessReports({sos:S.selectedSOs.slice(),previousProcess:previousProcess},function(r){
+      if(request!==_previousProcessAuditRequest||_previousProcessAuditKey(previousProcess)!==key||_canonicalPreviousProcess(item.value)!==previousProcess)return;
+      if(!r||!r.ok)return;
+      var missing=Array.isArray(r.missingSOs)?r.missingSOs.filter(Boolean):[];
+      item.prevProcessAudit={key:key,previousProcess:previousProcess,missingSOs:missing};
+      if(missing.length){
+        var shown=missing.slice(0,3).join(', ')+(missing.length>3?' ...':'');
+        showToast('C\u1ea3nh b\u00e1o: ch\u01b0a c\u00f3 checksheet c\u00f4ng \u0111o\u1ea1n '+previousProcess+' cho SO '+shown+'. Ghi ch\u00fa h\u1ec7 th\u1ed1ng s\u1ebd l\u01b0u c\u00f9ng phi\u00ean n\u00e0y.','er',6500);
+      }
+    },function(){
+      if(request===_previousProcessAuditRequest&&_previousProcessAuditKey(previousProcess)===key&&_canonicalPreviousProcess(item.value)===previousProcess)
+        showToast('Ch\u01b0a th\u1ec3 \u0111\u1ed1i chi\u1ebfu c\u00f4ng \u0111o\u1ea1n li\u1ec1n tr\u01b0\u1edbc. App s\u1ebd kh\u00f4ng t\u1ea1o ghi ch\u00fa t\u1ef1 \u0111\u1ed9ng cho l\u1ea7n nh\u1eadp n\u00e0y.','er',5000);
+    });
+  },550);
+}
+function _buildAutoPreviousProcessAttentionRows(){
+  var rows=[],soMap=getSOMap();
+  S.items.forEach(function(item,index){
+    if(!_isPreviousProcessItem(item,index)||!item.result||!item.prevProcessAudit)return;
+    var audit=item.prevProcessAudit, previousProcess=_canonicalPreviousProcess(item.value);
+    if(!previousProcess||audit.previousProcess!==previousProcess||audit.key!==_previousProcessAuditKey(previousProcess))return;
+    (audit.missingSOs||[]).forEach(function(so){
+      if(S.selectedSOs.indexOf(so)<0)return;
+      var meta=soMap[so]||S.soMeta[so]||{};
+      rows.push({so:so,itemCode:meta.itemCode||'',localCustomer:meta.localCustomer||'',program:meta.program||'',
+        remark:'Ch\u01b0a c\u00f3 checksheet c\u00f4ng \u0111o\u1ea1n '+previousProcess,remarkType:'SYSTEM_MISSING_PROCESS',email:S.email,timestamp:new Date().toISOString()});
+    });
+  });
+  return rows;
+}
 function setCustom(i,v,el){setVal(i,v,el);} // compat alias
-function setVal(i,v,el){var it=S.items[i];var nv=_isDecimalValueItem(it&&it.itemcheck)?_cleanDecimalInput(v):v;S.items[i].value=nv;if(el&&el.value!==nv)el.value=nv;_setDecimalFieldError(el,false);refreshIC(i);}
+function setVal(i,v,el){var it=S.items[i];var nv=_isDecimalValueItem(it&&it.itemcheck)?_cleanDecimalInput(v):v;S.items[i].value=nv;if(el&&el.value!==nv)el.value=nv;_setDecimalFieldError(el,false);_queuePreviousProcessAudit(i);refreshIC(i);}
 
 function refreshIC(i){
   var it=S.items[i]; var r=it.result;
@@ -2817,7 +2979,8 @@ async function doSave(partialOnly){
   });
   if(partialOnly&&!results.length){_isSaving=false;showToast('⚠️ Không có hạng mục nào được lưu','er',3500);return;}
   // Each save has one session ID, used for retry-safe server synchronization.
-  var sessionId = 'SID_'+now.getTime()+'_'+Math.random().toString(36).slice(2,7);
+  var sessionId = S.recheckSourceId ? _makeRecheckSessionId(S.recheckSourceId,now,partialOnly) : (partialOnly ? _makePartialSessionId(now) : _baseSessionId(now));
+  var autoPayAttentionRows=_buildAutoPreviousProcessAttentionRows();
   var payloads=[{
     _sessionId: sessionId,
     so:soJoinedF,
@@ -2831,6 +2994,7 @@ async function doSave(partialOnly){
     aqlQty:S.aqlQty||'',
     aqlAccept:S.aqlAccept||'',
     timestamp:now.toISOString(),
+    autoPayAttentionRows:autoPayAttentionRows,
     results:results
   }];
   var nSaved=results.length;
@@ -2845,7 +3009,7 @@ async function doSave(partialOnly){
     showToast('Khong the luu an toan tren thiet bi. Kiem tra dung luong roi thu lai.','er',6000);
     return;
   }
-  _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length,sessionId,partialOnly);
+  _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length,sessionId,partialOnly,S.recheckSourceId||'');
   _isSaving = false; // reset guard sau khi đã push vào queue thành công
   showDone(nSaved,!S.online,partialOnly);
   if(S.online)_bgSyncQueue();
@@ -3003,28 +3167,28 @@ function showDone(saved,offline,partialOnly){
   showScreen('D');
 }
 
-function _injectSessionToHistory(ic,lc,okN,ngN,naN,sessionId,partialOnly){
+function _injectSessionToHistory(ic,lc,okN,ngN,naN,sessionId,partialOnly,sourceCheckId){
   var soArr=S.selectedSOs.slice();var soJoined=soArr.join(', ');var soDisp=soArr.length>1?soArr[0]+' +'+(soArr.length-1):soArr[0];
   var now=new Date();var dateStr=_padC(now.getDate())+'/'+_padC(now.getMonth()+1)+'/'+now.getFullYear();var timeStr=_padC(now.getHours())+':'+_padC(now.getMinutes())+':'+_padC(now.getSeconds());
   var items=[];
   S.items.forEach(function(it){
     if(it.isRemark){
-      if(!partialOnly||it.note||it.photoBase64)items.push({itemcheck:it.itemcheck,result:partialOnly?'NOTE':(it.result||''),value:'',note:it.note||'',photo:''});
+      if(!partialOnly||it.note||it.photoBase64)items.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard||'',result:partialOnly?'NOTE':(it.result||''),value:'',note:it.note||'',photo:''});
     } else if(it.isDelta){
-      it.dRows.forEach(function(r){if(!partialOnly||r.result)items.push({itemcheck:it.itemcheck+' \u2014 '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});
+      it.dRows.forEach(function(r){if(!partialOnly||r.result)items.push({itemId:it.itemId,itemcheck:it.itemcheck+' \u2014 '+r.lbl,standard:it.standard||'',result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});
     } else if(it.isDim){
-      it.dimRows.forEach(function(r){if(!partialOnly||r.result)items.push({itemcheck:it.itemcheck+' \u2014 '+r.lbl,result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});
+      it.dimRows.forEach(function(r){if(!partialOnly||r.result)items.push({itemId:it.itemId,itemcheck:it.itemcheck+' \u2014 '+r.lbl,standard:it.standard||'',result:r.result||'',value:r.value||'',note:r.note||'',photo:''});});
     } else if(!partialOnly||it.result){
-      items.push({itemcheck:it.itemcheck,result:it.result||'',value:it.value||'',note:it.note||'',photo:''});
+      items.push({itemId:it.itemId,itemcheck:it.itemcheck,standard:it.standard||'',result:it.result||'',value:it.value||'',note:it.note||'',photo:''});
     }
   });
-  var _sid = sessionId||('LOC_'+now.getTime());
-  var sess={so:soJoined,soArr:soArr,soDisplay:soDisp,itemCode:ic,localCustomer:lc,
+  var _sid=sessionId||('LOC_'+now.getTime());
+  var sess={checkId:_sid,so:soJoined,soArr:soArr,soDisplay:soDisp,itemCode:ic,localCustomer:lc,
     process:S.process,inspector:S.email,operatorId:S.operatorId||'',machine:S.machine||'',
+    lotQty:S.lotQty||'',aqlQty:S.aqlQty||'',aqlAccept:S.aqlAccept||'',
     date:dateStr,time:timeStr,tsNum:now.getTime(),
     items:items,ok:okN,ng:ngN,na:naN,
-    _local:true, _sessionId:_sid};
-  // Xóa record local cũ có cùng sessionId (tránh duplicate khi render lại)
+    _local:true,_sessionId:_sid,sourceCheckId:sourceCheckId||''};
   H.all=H.all.filter(function(s){return !s._sessionId||s._sessionId!==_sid;});
   H.all.unshift(sess);
   H.allLoaded=true;H._needBgRefresh=true;_rebuildDropdowns();
@@ -3033,7 +3197,7 @@ function _padC(n){return n<10?'0'+n:''+n;}
 
 function resetForm(){
   if(S.items){S.items.forEach(function(it){it.photoBase64='';});}
-  S.selectedSOs=[];S.process='';S.items=[];S.soMeta={};
+  S.selectedSOs=[];S.process='';S.items=[];S.soMeta={};S.recheckSourceId='';
   S.operatorId='';S.machine='';S.lotQty='';S.aqlQty='';S.aqlAccept='';
   var _oi=document.getElementById('operatorIdInp');if(_oi)_oi.value='';
   var _mi=document.getElementById('machineInp');if(_mi)_mi.value='';hideMachineDD();
@@ -3372,7 +3536,9 @@ function renderHistoryList(data,q){
     // Người kiểm tra: chỉ lấy phần trước @
     var insp=sess.inspector?sess.inspector.split('@')[0]:'-';
     var machine=sess.machine?String(sess.machine).trim():'';
-    var procCell='<span class="h-proc-badge">'+esc(sess.process||'-')+'</span>'+(machine?'<span class="h-machine">Máy: '+esc(machine)+'</span>':'');
+    var rMeta=_recheckMeta(sess);
+    var recheckBadge=rMeta.isRecheck?'<span style="display:inline-block;margin-top:4px;padding:2px 6px;border:1px solid '+(rMeta.isPartial?'#f59e0b':'#6366f1')+';border-radius:4px;color:'+(rMeta.isPartial?'#b45309':'#4338ca')+';font-size:10px;font-weight:800;white-space:nowrap">\u21bb Check l\u1ea1i'+(rMeta.isPartial?' \u00b7 d\u1eebng':'')+'</span>':'';
+    var procCell='<span class="h-proc-badge">'+esc(sess.process||'-')+'</span>'+recheckBadge+(machine?'<span class="h-machine">M\u00e1y: '+esc(machine)+'</span>':'');
 
     // Kết quả pills
     var pills='<span class="h-verdict '+(isNg?'fail':'pass')+'">'+(isNg?'NG':'PASS')+'</span>'
@@ -3503,6 +3669,13 @@ function _renderDrawer(sess){
   }
   var checkTime=(_drDate&&_drTime)?_drDate+' '+_drTime:(_drDate||_drTime||'');
 
+  var recheckMeta=_recheckMeta(sess);
+  var recheckHTML='';
+  if(recheckMeta.isRecheck){
+    recheckHTML='<div style="margin-bottom:10px;padding:8px 10px;border:1px solid '+(recheckMeta.isPartial?'#f59e0b':'#818cf8')+';background:'+(recheckMeta.isPartial?'#fffbeb':'#eef2ff')+';border-radius:6px;font-size:12px;font-weight:700;color:'+(recheckMeta.isPartial?'#92400e':'#3730a3')+'">\u21bb Phi\u00ean check l\u1ea1i'+(recheckMeta.isPartial?' \u00b7 d\u1eebng ki\u1ec3m tra v\u00e0 l\u01b0u ph\u1ea7n \u0111\u00e3 ki\u1ec3m':'')+'</div>';
+  }else if(_isRecheckEligible(sess)){
+    recheckHTML='<button type="button" onclick="startRecheckFromDrawer()" style="width:100%;margin:0 0 10px;padding:10px 12px;border:1px solid #818cf8;border-radius:6px;background:#eef2ff;color:#3730a3;font-weight:800;font-size:13px;text-align:left;cursor:pointer">\u21bb Ki\u1ec3m tra l\u1ea1i phi\u00ean n\u00e0y</button>';
+  }
   var items = sess.items || [];
   var itemsHTML = '';
   if(!items.length){
@@ -3547,6 +3720,7 @@ function _renderDrawer(sess){
     +'</div>'
     +(checkTime ? '<div style="font-size:11px;color:var(--txt3);margin-bottom:8px;font-family:var(--mono)">🕐 '+esc(checkTime)+'</div>' : '')
     +infoHTML
+    +recheckHTML
     +'<div class="sec" style="margin-bottom:6px">Chi tiết hạng mục ('+items.length+')</div>'
     +itemsHTML;
 
