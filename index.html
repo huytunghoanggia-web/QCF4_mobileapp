@@ -2761,7 +2761,7 @@ function _queuePreviousProcessAudit(index){
     if(request!==_previousProcessAuditRequest||item.prevProcessAudit!==audit||_previousProcessAuditKey(previousProcess)!==key||_canonicalPreviousProcess(item.value)!==previousProcess)return;
     if(!r||!r.ok){
       audit.failed=true;_finishPreviousProcessAudit(audit);
-      showToast('Ch\u01b0a th\u1ec3 \u0111\u1ed1i chi\u1ebfu c\u00f4ng \u0111o\u1ea1n li\u1ec1n tr\u01b0\u1edbc. App s\u1ebd kh\u00f4ng t\u1ea1o ghi ch\u00fa t\u1ef1 \u0111\u1ed9ng cho l\u1ea7n nh\u1eadp n\u00e0y.','er',5000);
+      showToast('Ch\u01b0a th\u1ec3 hi\u1ec3n th\u1ecb k\u1ebft qu\u1ea3 \u0111\u1ed1i chi\u1ebfu ngay. App s\u1ebd \u0111\u1ed1i chi\u1ebfu l\u1ea1i khi l\u01b0u phi\u00ean.','er',5000);
       return;
     }
     audit.missingSOs=Array.isArray(r.missingSOs)?r.missingSOs.filter(Boolean):[];
@@ -2773,7 +2773,7 @@ function _queuePreviousProcessAudit(index){
   },function(){
     if(request===_previousProcessAuditRequest&&item.prevProcessAudit===audit&&_previousProcessAuditKey(previousProcess)===key&&_canonicalPreviousProcess(item.value)===previousProcess){
       audit.failed=true;_finishPreviousProcessAudit(audit);
-      showToast('Ch\u01b0a th\u1ec3 \u0111\u1ed1i chi\u1ebfu c\u00f4ng \u0111o\u1ea1n li\u1ec1n tr\u01b0\u1edbc. App s\u1ebd kh\u00f4ng t\u1ea1o ghi ch\u00fa t\u1ef1 \u0111\u1ed9ng cho l\u1ea7n nh\u1eadp n\u00e0y.','er',5000);
+      showToast('Ch\u01b0a th\u1ec3 hi\u1ec3n th\u1ecb k\u1ebft qu\u1ea3 \u0111\u1ed1i chi\u1ebfu ngay. App s\u1ebd \u0111\u1ed1i chi\u1ebfu l\u1ea1i khi l\u01b0u phi\u00ean.','er',5000);
     }
   });
 }
@@ -2803,6 +2803,12 @@ function _buildAutoPreviousProcessAttentionRows(){
     });
   });
   return rows;
+}
+function _selectedPreviousProcessForAudit(){
+  for(var i=0;i<S.items.length;i++){
+    if(_isPreviousProcessItem(S.items[i],i))return _canonicalPreviousProcess(S.items[i].value);
+  }
+  return '';
 }
 function setCustom(i,v,el){setVal(i,v,el);} // compat alias
 function setVal(i,v,el){var it=S.items[i];var nv=_isDecimalValueItem(it&&it.itemcheck)?_cleanDecimalInput(v):v;S.items[i].value=nv;if(el&&el.value!==nv)el.value=nv;_setDecimalFieldError(el,false);_queuePreviousProcessAudit(i);refreshIC(i);}
@@ -3013,6 +3019,9 @@ async function doSave(partialOnly){
   // Each save has one session ID, used for retry-safe server synchronization.
   var sessionId = S.recheckSourceId ? _makeRecheckSessionId(S.recheckSourceId,now,partialOnly) : (partialOnly ? _makePartialSessionId(now) : _baseSessionId(now));
   var autoPayAttentionRows=_buildAutoPreviousProcessAttentionRows();
+  // The server repeats this audit when it writes the session. This protects the
+  // automatic SO note when the phone audit was delayed, offline, or interrupted.
+  var previousProcessForAudit=_selectedPreviousProcessForAudit();
   var payloads=[{
     _sessionId: sessionId,
     so:soJoinedF,
@@ -3027,6 +3036,7 @@ async function doSave(partialOnly){
     aqlAccept:S.aqlAccept||'',
     timestamp:now.toISOString(),
     autoPayAttentionRows:autoPayAttentionRows,
+    previousProcessForAudit:previousProcessForAudit,
     results:results
   }];
   var nSaved=results.length;
@@ -3097,6 +3107,7 @@ function _isRetryableSyncError(msg){
   msg=String(msg||'').toLowerCase();
   return msg.indexOf('failed to fetch')>=0 || msg.indexOf('network')>=0 ||
          msg.indexOf('timeout')>=0 || msg.indexOf('ket noi')>=0 ||
+         msg.indexOf('doi chieu checksheet')>=0 ||
          msg.indexOf('kết nối')>=0 || msg.indexOf('server dang ban')>=0 ||
          msg.indexOf('server đang bận')>=0;
 }
