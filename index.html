@@ -1594,6 +1594,20 @@ var _QUEUE_DB_STORE = 'queue';
 var _QUEUE_DB_KEY = 'pending';
 var _queueWriteChain = Promise.resolve(true);
 
+function _settleWithin(promise, timeoutMs, fallback){
+  return new Promise(function(resolve){
+    var settled=false;
+    var timer=setTimeout(function(){finish(fallback);},timeoutMs);
+    function finish(value){
+      if(settled)return;
+      settled=true;
+      clearTimeout(timer);
+      resolve(value);
+    }
+    Promise.resolve(promise).then(finish,function(){finish(fallback);});
+  });
+}
+
 function _openBootCacheDB(){
   return new Promise(function(resolve, reject){
     if(!window.indexedDB){ resolve(null); return; }
@@ -2053,9 +2067,15 @@ function saveQueue(){
   catch(e){updateQueueUI();return Promise.resolve(false);}
   try{localStorage.setItem(QKEY,JSON.stringify(payload));localOk=true;}catch(e){}
   updateQueueUI();
-  _queueWriteChain=_queueWriteChain.catch(function(){return false;}).then(function(){
+  _queueWriteChain=_settleWithin(_queueWriteChain.catch(function(){return false;}).then(function(){
     return _savePersistentQueue(payload).then(function(){return true;}).catch(function(){return false;});
-  });
+  }),5000,false);
+  // localStorage is already a durable copy on supported devices. Do not make
+  // the Save button wait for a delayed IndexedDB transaction.
+  if(localOk){
+    if(S.online&&S.queue.length>0&&!_syncInProgress) _scheduleAutoSync(1500,false);
+    return Promise.resolve(true);
+  }
   return _queueWriteChain.then(function(idbOk){
     var durable=localOk||idbOk;
     if(durable&&S.online&&S.queue.length>0&&!_syncInProgress) _scheduleAutoSync(1500,false);
@@ -2778,17 +2798,9 @@ function _queuePreviousProcessAudit(index){
   });
 }
 function _waitForPreviousProcessAuditBeforeSave(){
-  var pending=[];
-  S.items.forEach(function(item,index){
-    if(_isPreviousProcessItem(item,index)&&item.prevProcessAudit&&item.prevProcessAudit.pending)pending.push(item.prevProcessAudit);
-  });
-  if(!pending.length)return Promise.resolve(true);
-  return Promise.all(pending.map(function(audit){return new Promise(function(done){
-    var finished=false;
-    function finish(ok){if(finished)return;finished=true;done(ok);}
-    audit.waiters.push(function(){finish(true);});
-    setTimeout(function(){finish(false);},12000);
-  });})).then(function(results){return results.every(Boolean);});
+  // The save endpoint performs the authoritative audit. The phone lookup is
+  // only for an early warning, so it must never delay a QC from saving.
+  return Promise.resolve(true);
 }
 function _buildAutoPreviousProcessAttentionRows(){
   var rows=[];
@@ -3051,7 +3063,9 @@ async function doSave(partialOnly){
     showToast('Khong the luu an toan tren thiet bi. Kiem tra dung luong roi thu lai.','er',6000);
     return;
   }
-  _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length,sessionId,partialOnly,S.recheckSourceId||'');
+  try{
+    _injectSessionToHistory(payloads[0].itemCode||'',payloads[0].localCustomer||'',results.filter(function(r){return r.result==='OK';}).length,results.filter(function(r){return r.result==='NG';}).length,results.filter(function(r){return r.result==='NA';}).length,sessionId,partialOnly,S.recheckSourceId||'');
+  }catch(e){console.warn('[Save] Local history update skipped:',e);}
   _isSaving = false; // reset guard sau khi đã push vào queue thành công
   showDone(nSaved,!S.online,partialOnly);
   if(S.online)_bgSyncQueue();
