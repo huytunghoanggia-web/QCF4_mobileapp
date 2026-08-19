@@ -2043,6 +2043,7 @@ function _hidePWABanners(){
 var AUTO_SYNC_INTERVAL_MS = 30000;
 var AUTO_SYNC_RETRY_MS = 60000;
 var AUTO_SYNC_ERROR_RETRY_MS = 180000;
+var AUTO_SYNC_404_RETRY_MS = 15000;
 var _autoSyncTimer = null;
 
 function watchNetwork(){
@@ -3141,8 +3142,15 @@ function _isRetryableSyncError(msg){
   return msg.indexOf('failed to fetch')>=0 || msg.indexOf('network')>=0 ||
          msg.indexOf('timeout')>=0 || msg.indexOf('ket noi')>=0 ||
          msg.indexOf('doi chieu checksheet')>=0 ||
+         /^http (?:404|408|429|5\d\d)\b/.test(msg) ||
          msg.indexOf('kết nối')>=0 || msg.indexOf('server dang ban')>=0 ||
          msg.indexOf('server đang bận')>=0;
+}
+function _syncErrorRetryDelay(msg){
+  // Google can occasionally return a transient 404 before Apps Script receives
+  // the POST. Retry only that transport error sooner; all other errors retain
+  // the existing conservative retry cadence.
+  return /^http 404\b/i.test(String(msg||'')) ? AUTO_SYNC_404_RETRY_MS : AUTO_SYNC_ERROR_RETRY_MS;
 }
 function _bgSyncQueue(forceRetry){
   // Auto sync chạy nền: không overlay, không khóa form, chỉ xử lý S.queue.
@@ -3154,7 +3162,7 @@ function _bgSyncQueue(forceRetry){
     if(!p._syncError) return true;
     if(forceRetry && _isRetryableSyncError(p._syncError)) return true;
     if(!_isRetryableSyncError(p._syncError)) return false;
-    return now - (p._lastSyncErrorAt||0) >= AUTO_SYNC_ERROR_RETRY_MS;
+    return now - (p._lastSyncErrorAt||0) >= _syncErrorRetryDelay(p._syncError);
   });
   if(!pending.length){ return; }
   pending.forEach(function(p){
@@ -3162,7 +3170,7 @@ function _bgSyncQueue(forceRetry){
   });
   saveQueue();
   _setSyncInProgress(true);
-  _syncOneByOne(pending.slice(), 0, 0, function(totalSaved, failedCount){
+  _syncOneByOne(pending.slice(), 0, 0, function(totalSaved, failedCount, errors){
     _setSyncInProgress(false);
     updateQueueUI();
     if(totalSaved>0){
@@ -3170,7 +3178,11 @@ function _bgSyncQueue(forceRetry){
       _bgRefreshHistory();
     }
     if(S.queue.length>0){
-      _scheduleAutoSync(failedCount>0 ? AUTO_SYNC_RETRY_MS : AUTO_SYNC_INTERVAL_MS, false);
+      var retryDelay=AUTO_SYNC_RETRY_MS;
+      if(failedCount>0 && (errors||[]).some(function(x){return /^http 404\b/i.test(String(x&&x.error||''));})){
+        retryDelay=AUTO_SYNC_404_RETRY_MS;
+      }
+      _scheduleAutoSync(failedCount>0 ? retryDelay : AUTO_SYNC_INTERVAL_MS, false);
     }
   });
 }
@@ -3462,7 +3474,11 @@ function _serverLoad(page){
     function(){hideHLoading();showToast('⚠️ Lỗi kết nối','er');}
   );
 }
-function _bgRefreshHistory(expectedVersion){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(function(){
+function _bgRefreshHistory(expectedVersion){
+  // A local sync/update can request a refresh while the version poll already
+  // has one pending. Preserve that target so a failed replacement still retries.
+  if(!expectedVersion&&_historyRefreshVersion)expectedVersion=_historyRefreshVersion;
+  clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(function(){
   if(!S.online){
     if(expectedVersion===_historyRefreshVersion)_historyRefreshVersion='';
     // Offline → restore history cache
