@@ -3428,7 +3428,9 @@ async function _openHistory(){
   var hc=null;
   try{hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');}catch(e){}
   if(!hc){
-    try{hc=await _readPersistentHistoryCache();}catch(e){}
+    // IndexedDB occasionally stalls on mobile after an app has been idle.
+    // Cache is optional, so never let it prevent the server history request.
+    try{hc=await _settleWithin(_readPersistentHistoryCache(),800,null);}catch(e){}
   }
   var CACHE_TTL = 7*24*60*60*1000;
   if(hc&&hc.all&&hc.all.length&&(Date.now()-(hc.ts||0))<CACHE_TTL){
