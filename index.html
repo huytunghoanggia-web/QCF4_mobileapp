@@ -1327,13 +1327,32 @@ function _gasCallSaveResults(payloads, ok, err) {
     if(err) err(e);
   });
 }
+function _gasCallTimed(action, body, timeoutMs, ok, err) {
+  var finished=false;
+  var timer=setTimeout(function(){
+    if(finished)return;
+    finished=true;
+    if(err)err(new Error('Request timeout'));
+  },timeoutMs);
+  _gasCall(action,body,function(r){
+    if(finished)return;
+    finished=true;
+    clearTimeout(timer);
+    if(ok)ok(r);
+  },function(e){
+    if(finished)return;
+    finished=true;
+    clearTimeout(timer);
+    if(err)err(e);
+  });
+}
 
 function gasDoLogin(pwd,ok,err)  { _gasCall('login',{password:pwd},ok,err); }
 function gasGetAppData(ok,err)   { _gasCall('getAppData',{},ok,err); }
 function gasSaveResults(p,ok,err){ _gasCallSaveResults(p,ok,err); }
-function gasGetHistory(p,ok,err) { _gasCall('getHistory',{params:p},ok,err); }
+function gasGetHistory(p,ok,err) { _gasCallTimed('getHistory',{params:p},35000,ok,err); }
 function gasSearchAll(p,ok,err)  { _gasCall('searchAllHistory',{params:p},ok,err); }
-function gasGetHistoryVersion(ok,err){ _gasCall('getHistoryVersion',{},ok,err||function(){}); }
+function gasGetHistoryVersion(ok,err){ _gasCallTimed('getHistoryVersion',{},12000,ok,err||function(){}); }
 function gasCheckDup(so,pr,ok)   { _gasCall('checkDup',{so:so,process:pr},ok,function(){}); }
 function gasCheckPreviousProcessReports(p,ok,err){ _gasCall('checkPreviousProcessReports',{params:p},ok,err||function(){}); }
 
@@ -3357,6 +3376,7 @@ function onFilterChange(){clearTimeout(_hFilterTimer);clearTimeout(_hSearchTimer
 function gotoPage2(p){var filtered=H._filtered||H.all;var maxP=Math.ceil(filtered.length/H.pageSize);if(p<1||p>maxP)return;H.page=p;var start=(p-1)*H.pageSize;H.sessions=filtered.slice(start,start+H.pageSize);var f=getHFilter();requestAnimationFrame(function(){renderHistoryList(H.sessions,f.q);renderPagerClient(filtered.length);updateHStat(H.sessions,f);});var sb=document.getElementById('hScrollBody');if(sb)sb.scrollTop=0;}
 var _historyLiveTimer=null;
 var _historyLiveVersion='';
+var _historyRefreshVersion='';
 var _historyTabActive=false;
 var _HISTORY_LIVE_MS=15000;
 
@@ -3374,8 +3394,12 @@ function _pollHistoryVersion(){
   gasGetHistoryVersion(function(r){
     if(!_historyTabActive) return;
     if(r&&r.ok&&r.version){
-      if(_historyLiveVersion && _historyLiveVersion!==r.version) _bgRefreshHistory();
-      _historyLiveVersion=r.version;
+      // A version becomes "live" only after the 200-session refresh succeeds.
+      // Otherwise one transient failed fetch could leave History stale forever.
+      if(_historyLiveVersion!==r.version&&_historyRefreshVersion!==r.version){
+        _historyRefreshVersion=r.version;
+        _bgRefreshHistory(r.version);
+      }
     }
     _scheduleHistoryLivePolling();
   },function(){
@@ -3438,8 +3462,9 @@ function _serverLoad(page){
     function(){hideHLoading();showToast('⚠️ Lỗi kết nối','er');}
   );
 }
-function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(function(){
+function _bgRefreshHistory(expectedVersion){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(function(){
   if(!S.online){
+    if(expectedVersion===_historyRefreshVersion)_historyRefreshVersion='';
     // Offline → restore history cache
     try{
       var hc=JSON.parse(localStorage.getItem('rpac_hist_cache')||'null');
@@ -3454,7 +3479,12 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
   }
   var reqId=++_hReqId;var statEl=document.getElementById('hStat');if(statEl)statEl.style.opacity='0.55';
   gasGetHistory({page:1,filter:{q:'',process:'',inspector:''},needInspList:true,maxSessions:200},function(r){
-    if(reqId!==_hReqId||H.mode==='searchAll')return;if(statEl)statEl.style.opacity='';if(!r||!r.ok)return;
+    if(reqId!==_hReqId||H.mode==='searchAll'){
+      if(expectedVersion===_historyRefreshVersion)_historyRefreshVersion='';
+      return;
+    }
+    if(statEl)statEl.style.opacity='';
+    if(!r||!r.ok){if(expectedVersion===_historyRefreshVersion)_historyRefreshVersion='';return;}
     var newAll=(r.data||[]);
     var changed=(newAll.length!==H.all.length)||(newAll.length>0&&H.all.length>0&&newAll[0].tsNum!==H.all[0].tsNum);
     H.all=newAll;H.mode='recent';
@@ -3462,7 +3492,9 @@ function _bgRefreshHistory(){clearTimeout(_bgRefTimer);_bgRefTimer=setTimeout(fu
     _rememberRecentHistory(newAll,r.inspList||H.inspList);
     if(changed)applyClientFilter(true);
     _saveHistoryCache(newAll,r.inspList||H.inspList);
-  },function(){if(statEl)statEl.style.opacity='';});
+    if(expectedVersion){_historyLiveVersion=expectedVersion;}
+    if(expectedVersion===_historyRefreshVersion)_historyRefreshVersion='';
+  },function(){if(statEl)statEl.style.opacity='';if(expectedVersion===_historyRefreshVersion)_historyRefreshVersion='';});
 },300);}
 var _machineList = [];
 function _machineOptionsHTML(selected){
